@@ -167,15 +167,23 @@ public:
     int chStop(uint32_t ch);
     int chSet(uint32_t ch, int pin, bool idlelvl = false, bool invert = false);
     int chFadeISR(uint32_t ch, bool enable);
+    int chAttachTimer(uint32_t ch, uint8_t timer);
 
     esp_err_t chDuty(uint32_t ch, uint32_t duty);
     esp_err_t chPhase(uint32_t ch, uint32_t phase);
     esp_err_t chDutyPhase(uint32_t ch, uint32_t duty, uint32_t phase);
 
     uint32_t chGetDuty(uint32_t ch) const;
-    uint32_t chGetMaxDuty(uint32_t ch) const;// { CH_SAFE(ch); return wrap_ledc_get_max_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel); };
+    uint32_t chGetMaxDuty(uint32_t ch) const;   // { CH_SAFE(ch); return wrap_ledc_get_max_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel); };
     ledc::ch const *chGet(uint32_t ch) const { return &channels[ch % (LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX)]; };
-    int chAttachTimer(uint32_t ch, uint8_t timer);
+
+    /**
+     * @brief find timer attached to a specific channel
+     * 
+     * @param ch channel number
+     * @return uint32_t timer number attached
+     */
+    uint8_t chGetTimernum(int32_t ch) const;
 
 
     // Timer methods

@@ -115,10 +115,8 @@ int PWMCtl::chStart(uint32_t ch, int pin){
     return ESP_ERR_INVALID_STATE;
 
   // run attached Timer (if needed)
-  uint8_t t = channels[ch].cfg.timer_sel + ch/LEDC_CHANNEL_MAX * LEDC_TIMER_MAX;
-  if (tmStart(t)){
+  if (tmStart(chGetTimernum(ch)))
     return ESP_ERR_INVALID_STATE;
-  }
 
   channels[ch].state = ch_state::active;
   printf("channel:%d started as LEDC ch:%d, mode:%d\n", ch, channels[ch].cfg.channel, channels[ch].cfg.speed_mode);
@@ -184,7 +182,13 @@ int PWMCtl::chFadeISR(uint32_t ch, bool enable){
   // TODO: is there any way to detach channel fade ISR cb? /it, is!/
 }
 
+uint8_t PWMCtl::chGetTimernum(int32_t ch) const {
+  ch %= LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX;
+  return channels[ch].cfg.timer_sel + ch/LEDC_CHANNEL_MAX * LEDC_TIMER_MAX;
+}
 
+
+// timers
 void PWMCtl::tmInit(){
   ledc_timer_config_t t_cfg = {
     LEDC_LOW_SPEED_MODE,      // .speed_mode
