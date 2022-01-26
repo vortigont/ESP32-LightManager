@@ -32,9 +32,6 @@ void GenericLight::goValue(uint32_t value, uint32_t duration){
     if(luma != luma::curve::linear)
         value = curveMap(luma, value, getMaxValue(), getMaxValue());        // map to luma curve if non-linear
 
-    if (!duration)
-        set_to_value(value);
-
     printf("goValue val:%d, duration:%d\n", value, duration);
     fade_to_value(value, duration);
 };
@@ -77,7 +74,8 @@ float GenericLight::getCurrentPower() const {
 
 
 // CompositeLight methods
-CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : sub_type(gl->getLType()), ps(share), GenericLight(lightsource_t::composite, gl->getMaxPower(), gl->getCurve()){
+CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : sub_type(gl->getLType()), ps(share), GenericLight(lightsource_t::composite, 0, gl->getCurve()){
+    combined_value = 0;
     addLight(gl, id);
 };
 
@@ -90,18 +88,124 @@ bool CompositeLight::exist(uint8_t id) const {
 }
 
 bool CompositeLight::addLight(GenericLight *gl, uint8_t id){
-    auto node = std::make_shared<LightSource>();
     if (exist(id))
-        return false;
+        return false;       // light with such id already exist
 
+    if (gl->getLType() != sub_type)
+        return false;       // added light source does not match, can't mix different light sources (yet)
+
+    auto node = std::make_shared<LightSource>();
     node->id = id;
     node->light.reset(std::move(gl));
-    if (ls.add(node)){
-        power += node->light->getMaxPower();
-        return true;
+
+    if (!ls.add(node))
+        return false;
+
+    switch(ps){
+        case power_share_t::equal : {
+            if (ls.size() == 1)
+                combined_value = node->light->getMaxValue();        // MaxValue will be the same for all sources defined by first added node
+            break;
+        }
+        default : {
+            combined_value += node->light->getMaxValue();
+        }
     }
-    return false;
+
+    power += node->light->getMaxPower();
+    return true;
 }
+
+
+GenericLight* CompositeLight::getLight(uint8_t id){
+    for (auto _i = ls.cbegin(); _i != ls.cend(); ++_i){
+        if (_i->get()->id == id)
+            return _i->get()->light.get();
+    }
+    return nullptr;
+}
+
+
+uint32_t CompositeLight::getValue_incremental() const {
+    uint32_t val = 0;
+    for (auto _i = ls.cbegin(); _i != ls.cend(); ++_i){
+        val += _i->get()->light->getValue();
+    }
+    return val;
+}
+
+
+uint32_t CompositeLight::getValue() const {
+    switch(ps){
+        case power_share_t::equal : {
+            if (ls.size()){
+                return ls.head()->light->getValue() * ls.size();            // all lights are equal, get the first one and multiply by the number of lights
+            }
+        }
+        default :
+            return getValue_incremental();
+    }
+}
+
+float CompositeLight::getCurrentPower() const {
+    switch(ps){
+        case power_share_t::equal : {
+            if (ls.size())
+                return ls.head()->light->getCurrentPower() * ls.size();     // all lights are equal, get the first one and multiply by the number of lights
+            return 0;
+        }
+        default : {
+            float val = 0.0;
+            for (auto _i = ls.cbegin(); _i != ls.cend(); ++_i){
+                val += _i->get()->light->getCurrentPower();
+            }
+            return val;
+        }
+    }
+}
+
+luma::curve CompositeLight::setCurve( luma::curve curve){
+    luma = curve;
+    for (auto _i = ls.begin(); _i != ls.end(); ++_i){
+        _i->get()->light->setCurve(curve);
+    }
+    return luma;
+}
+
+
+void CompositeLight::goValueIncremental(uint32_t value, uint32_t duration){
+    for (auto _i = ls.begin(); _i != ls.end(); ++_i){
+        uint32_t m = _i->get()->light->getMaxValue();
+
+        if (value >= m){    // кратное увеличение яркости
+            _i->get()->light->fade_to_value(m, duration);
+            value -= m;
+            continue;
+        }
+
+        _i->get()->light->fade_to_value(value, duration);   // выставляем остаток
+        value = 0;                                          // остальные источники гасим
+    }
+}
+
+void CompositeLight::goValueEqual(uint32_t value, uint32_t duration){
+    for (auto _i = ls.begin(); _i != ls.end(); ++_i){
+        _i->get()->light->fade_to_value(value, duration);
+    }
+}
+
+void CompositeLight::goValueComposite(uint32_t value, uint32_t duration){
+    if (!ls.size())
+        return;         // skip empty obj
+
+    switch(ps){
+        case power_share_t::equal :
+            return goValueEqual(value, duration);
+        default :
+            return goValueIncremental(value, duration);
+    }
+}
+
 
 
 /*
@@ -113,4 +217,6 @@ LightUnit::LightUnit(const uint16_t _id, lightsource_t type, const char *_descr)
         descr.reset(strcpy(new char[strlen(_descr) + 1], _descr));
 };
 */
+
+
 

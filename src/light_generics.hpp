@@ -43,20 +43,22 @@ enum class lightsource_t:uint8_t {
 enum class power_share_t:uint8_t {
     incremental,        // a set of lights combined
     equal,              // all sources are constantly equal
-    interleave          // sources try to do max load in a round robbin time slots (phased PWM) 
+    phaseshift          // sources try to do max load in a round robbin time slots (phase-shifted PWM)
 };
 
 
 class GenericLight {
+friend class CompositeLight;
 
 protected:
     lightsource_t const ltype;
     luma::curve luma;
     float power;
 
+    //inline void brt(uint32_t v, uint32_t duration){ return duration ? fade_to_value(v, duration) : set_to_value(v); };
+
     virtual void set_to_value(uint32_t value) = 0;            // pure virtual
-    inline virtual void fade_to_value(uint32_t value, uint32_t duration){ return set_to_value(value); };
-    friend class LightUnit;
+    virtual void fade_to_value(uint32_t value, uint32_t duration){ return set_to_value(value); };    // should be overriden with drivers supporting fade
 
 public:
     GenericLight(lightsource_t type = lightsource_t::generic, float pwr = 1.0, luma::curve lcurve = luma::curve::linear) : ltype(type), power(pwr), luma(lcurve){};
@@ -71,7 +73,6 @@ public:
     inline virtual void goStep(int32_t step, uint32_t duration = DEFAULT_FADE_TIME){ return goValue( getValue() + step, duration); };
 
     inline virtual void pwr(bool state, uint32_t duration = DEFAULT_FADE_TIME){ state ? goOn(duration) : goOff(duration); };
-    inline virtual void fade(bool state, uint32_t duration){ return pwr(state, duration); };
 
     virtual void goValueScaled(uint32_t value, uint32_t scale=100, uint32_t duration = DEFAULT_FADE_TIME);
     virtual void goStepScaled(int32_t step, uint32_t scale=100, uint32_t duration = DEFAULT_FADE_TIME);
@@ -108,8 +109,21 @@ class DimmableLight : public GenericLight {
 public:
     DimmableLight(float power = 1.0, luma::curve lcurve = luma::curve::linear) : GenericLight(lightsource_t::dimmable, power, lcurve){};
 
-    // Dimmable light specific methods
+    // PWM Dimmable light specific methods
     virtual void setPWM(uint8_t resolution, uint32_t freq) = 0;
+
+    virtual void setInversion(bool invert){};
+
+    virtual void setPhaseShift(int degrees){};
+
+    virtual void setDutyShift(uint32_t dshift){};
+
+    virtual bool getInversion(){ return false; };
+
+    virtual int getPhaseShift(){ return 0; };
+
+    virtual uint32_t getDutyShift(){ return 0; };
+
 };
 
 
@@ -125,9 +139,10 @@ class CompositeLight : public GenericLight {
 
     lightsource_t const sub_type;
     power_share_t ps;
+    uint32_t combined_value = 0;                    // проверить на возможное /0
 
     //std::unique_ptr<char[]> descr;                  // Mnemonic name for the instance
-    LList<std::shared_ptr<LightSource>> ls;        // list of registered Ligh Sources objects
+    LList<std::shared_ptr<LightSource>> ls;         // list of registered Ligh Sources objects
 
     /**
      * @brief check if light source with specified id is already registered
@@ -138,10 +153,54 @@ class CompositeLight : public GenericLight {
      */
     bool exist(uint8_t id) const;
 
+    /**
+     * @brief Get current brightness Value for incremental power-share mode
+     * 
+     * @return uint32_t brightness Value
+     */
+    uint32_t getValue_incremental() const;
+
+    /**
+     * @brief Set the to value for incremental-type lights
+     * it sets brt value incrementaly starting from the first added soruce
+     * 
+     * @param value 
+     */
+    void goValueIncremental(uint32_t value, uint32_t duration);
+
+    void goValueEqual(uint32_t value, uint32_t duration);
+
+    void goValueComposite(uint32_t value, uint32_t duration);
+
+    // *** overrides *** //
+    inline void set_to_value(uint32_t value) override { goValueComposite(value, 0); };
+    inline void fade_to_value(uint32_t value, uint32_t duration) override { goValueComposite(value, duration); };
+
 public:
     CompositeLight(lightsource_t type, power_share_t share = power_share_t::incremental) : sub_type(type), ps(share), GenericLight(lightsource_t::composite, 0){};
     CompositeLight(GenericLight *gl, uint8_t id = 1, power_share_t share = power_share_t::incremental);
 
+    // *** Parent Methods Overrides ***
+    // set methods
+    luma::curve setCurve( luma::curve curve) override;
+    float setMaxPower(float p) override{ return power; }     // combined power change is not supported
+
+    // get methods
+    uint32_t getValue() const override;
+    inline uint32_t getMaxValue() const override { return combined_value; }
+    float getCurrentPower() const override;
+
+    // Own methods
     bool addLight(GenericLight *gl, uint8_t id);
+
+
+    /**
+     * @brief Get GenericLight object via id
+     * 
+     * @param id requested obj id
+     * @return GenericLight* if sich id exist
+     * @return nullptr otherwise
+     */
+    GenericLight *getLight(uint8_t id);
 
 };
