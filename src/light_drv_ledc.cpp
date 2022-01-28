@@ -23,3 +23,26 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
  *  Public License along with this library; if not, get one at
  *  https://opensource.org/licenses/LGPL-3.0
 */
+
+#include "light_drv_ledc.hpp"
+
+void LEDCLight::fade_to_value(uint32_t value, uint32_t duration){
+    if (fc && duration)
+        fc->fadebyTime(ch, value, duration);
+    else
+        set_to_value(value);
+};
+
+void LEDCLight::setPWM(uint8_t resolution, uint32_t freq){
+    if (resolution >= LEDC_TIMER_BIT_MAX)
+        resolution = LEDC_TIMER_BIT_MAX - 1;
+
+    pwm->tmSet(pwm->chGetTimernum(ch), (ledc_timer_bit_t)resolution, freq);
+}
+
+void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
+    if (dshift > getMaxValue())
+        dshift = getMaxValue();
+
+    pwm->chDutyPhase(ch, duty, dshift);
+}

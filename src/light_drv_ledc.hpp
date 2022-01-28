@@ -30,14 +30,13 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 class LEDCLight : public DimmableLight {
 
-protected:
     int gpio;
     uint32_t ch;
     PWMCtl *pwm;
     FadeCtrl *fc;
 
-    virtual void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); };
-    virtual void fade_to_value(uint32_t value, uint32_t duration){ fc->fadebyTime(ch, value, duration); };
+    inline void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); };
+    void fade_to_value(uint32_t value, uint32_t duration) override;
 
 public:
     LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0) : ch(channel), gpio(pin), fc(fader), DimmableLight(power, lcurve){
@@ -46,9 +45,22 @@ public:
     };
     virtual ~LEDCLight(){};
 
-    inline virtual uint32_t getValue() const override { return PWMCtl::getInstance()->chGetDuty(ch); };
-    inline virtual uint32_t getMaxValue() const override { return PWMCtl::getInstance()->chGetMaxDuty(ch); };
-
     PWMCtl *pwmGet(){ return pwm; };
-    void setPWM(uint8_t resolution, uint32_t freq){};
+
+    // *** Overrides *** //
+    uint32_t getValue() const override { return PWMCtl::getInstance()->chGetDuty(ch); };
+    uint32_t getMaxValue() const override { return PWMCtl::getInstance()->chGetMaxDuty(ch); };
+
+    void setPWM(uint8_t resolution, uint32_t freq) override;
+
+    /**
+     * @brief Set the Duty Shift for PWM channel
+     * used for Phase-Shifted PWM dimming.
+     * Supported range is 0-MAX_DUTY
+     * @param dshift 
+     */
+    void setDutyShift(uint32_t duty, uint32_t dshift) override;
+
+    // Own methods
+
 };

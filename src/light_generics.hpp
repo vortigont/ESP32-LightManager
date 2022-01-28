@@ -55,8 +55,6 @@ protected:
     luma::curve luma;
     float power;
 
-    //inline void brt(uint32_t v, uint32_t duration){ return duration ? fade_to_value(v, duration) : set_to_value(v); };
-
     virtual void set_to_value(uint32_t value) = 0;            // pure virtual
     virtual void fade_to_value(uint32_t value, uint32_t duration){ return set_to_value(value); };    // should be overriden with drivers supporting fade
 
@@ -81,6 +79,25 @@ public:
     inline virtual luma::curve setCurve( luma::curve curve) { luma = curve; return luma; };
     virtual float setMaxPower(float p);
 
+    /**
+     * @brief Invert light source control,
+     * i.e. inverse on/off logic or PWM active level
+     * 
+     * @param invert 
+     * 
+     * @return true 
+     * @return false 
+     */
+    virtual bool setInvertedLogic(bool invert){ return false; };
+
+    /**
+     * @brief Check if light source has inverted logic
+     * 
+     * @return true if light is inverted
+     * @return false otherwise
+     */
+    virtual bool getInvertedLogic() const { return false; };
+
     // get methods
     virtual lightsource_t getLType() const { return ltype; }
 
@@ -101,7 +118,7 @@ public:
     ConstantLight(float power = 1.0) : GenericLight(lightsource_t::constant, power, luma::curve::binary){};
     luma::curve setCurve( luma::curve curve) { return luma; };
     uint32_t getMaxValue() const override { return 1; }
-    virtual float getCurrentPower() const override { return getMaxValue(); };
+    float getCurrentPower() const override { return getMaxPower(); };
 };
 
 
@@ -112,18 +129,18 @@ public:
     // PWM Dimmable light specific methods
     virtual void setPWM(uint8_t resolution, uint32_t freq) = 0;
 
-    virtual void setInversion(bool invert){};
-
     virtual void setPhaseShift(int degrees){};
 
-    virtual void setDutyShift(uint32_t dshift){};
-
-    virtual bool getInversion(){ return false; };
+    /**
+     * @brief Set Duty Shift value for the light source if supported by backend driver
+     * 
+     * @param dshift duty value 0 - MAX_DUTY_VALUE 
+     */
+    virtual void setDutyShift(uint32_t duty, uint32_t dshift){};
 
     virtual int getPhaseShift(){ return 0; };
 
     virtual uint32_t getDutyShift(){ return 0; };
-
 };
 
 
@@ -168,9 +185,38 @@ class CompositeLight : public GenericLight {
      */
     void goValueIncremental(uint32_t value, uint32_t duration);
 
+    /**
+     * @brief Set the to value for equal-type lights
+     * i.e. non-dimming lights, or synchronous PWMs
+     * all lights get's the same settings as first light added the container
+     * 
+     * @param value - brightness value in range 0-MAX_BRIGHTNESS of a first light
+     * @param duration - fade duration (if supported by backend driver)
+     */
     void goValueEqual(uint32_t value, uint32_t duration);
 
+    /**
+     * @brief a selector for specific methods depending on power_share type
+     * 
+     * @param value
+     * @param duration
+     */
     void goValueComposite(uint32_t value, uint32_t duration);
+
+    /**
+     * @brief Set the to value for dimmable lights
+     * operates like goValueEqual() with an additionfor PWM drivers
+     * supporting per channel phase control. Resulting waveforms would be
+     * shifted in time to achive as much uniform load as possible.
+     * The goal is make PWM dimming more even-spreaded
+     * - provide less flicker or even flickerless PWM
+     * - reduce power supply stressing with 0 to 100% transitions like with sync PWM
+     * - reduce audible noise from PSU and FET drivers feeding LEDs
+     * 
+     * @param value - brightness value in range 0-MAX_BRIGHTNESS of a first light
+     * @param duration - fade duration (if supported by backend driver)
+     */
+    void goValuePhaseShift(uint32_t value, uint32_t duration);
 
     // *** overrides *** //
     inline void set_to_value(uint32_t value) override { goValueComposite(value, 0); };
@@ -183,7 +229,8 @@ public:
     // *** Parent Methods Overrides ***
     // set methods
     luma::curve setCurve( luma::curve curve) override;
-    float setMaxPower(float p) override{ return power; }     // combined power change is not supported
+
+    float setMaxPower(float p) override { return power; }     // combined power change is not supported
 
     // get methods
     uint32_t getValue() const override;
@@ -191,6 +238,18 @@ public:
     float getCurrentPower() const override;
 
     // Own methods
+
+    /**
+     * @brief add a light source to the container
+     * combined power will be a sum of all light sources,
+     * depending on power_share type combined_value (max brightness value)
+     * might be a sum of max_values for each sources or fixed value to the first light sources added
+     * 
+     * @param gl a pointer to GenricLight object or it's derivateve actually (pointer will become invalidated on adding)
+     * @param id any random id for the added light source
+     * @return true on success addition
+     * @return false otherwise
+     */
     bool addLight(GenericLight *gl, uint8_t id);
 
 
@@ -198,7 +257,7 @@ public:
      * @brief Get GenericLight object via id
      * 
      * @param id requested obj id
-     * @return GenericLight* if sich id exist
+     * @return GenericLight* if such id exist
      * @return nullptr otherwise
      */
     GenericLight *getLight(uint8_t id);

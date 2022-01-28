@@ -75,21 +75,26 @@ esp_err_t PWMCtl::chPhase(uint32_t ch, uint32_t phase){
 
 esp_err_t PWMCtl::chDutyPhase(uint32_t ch, uint32_t duty, uint32_t phase){
   ch %= LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX;
+  //phase %= LEDC_HPOINT_VAL_MAX;
 
   channels[ch].cfg.duty = duty;
   channels[ch].cfg.hpoint = phase;
 
-/*
-  if (!channels[ch].initialized){
-    printf("err set duty for ch:%d\n", ch);
-    return ESP_ERR_INVALID_STATE;
-  }
-*/
-
   printf("Set Channel:%d, duty:%d, phase:%d\n", ch, duty, phase);
-  return ledc_set_duty_and_update(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
-  //ledc_set_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty);
-  //ledc_update_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel);
+
+  /* this method does not change hpoint value
+    Looks like it's been fixed here - https://github.com/espressif/esp-idf/commit/e175086226405ca5dfd0b0cdde917b0ad8330827
+    and merged in https://github.com/espressif/esp-idf/commit/3821a09f8369d510cf9d1669967bfc25f68dd783
+    Arduino's 2.0.2 is quite old, so works only for idf build
+  */
+  //return ledc_set_duty_and_update(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
+
+// Use this as a compatible workaround for now
+  if (phase)
+    ledc_set_duty_with_hpoint(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
+  else
+    ledc_set_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty);
+  return ledc_update_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel);
 };
 
 uint32_t PWMCtl::chGetDuty(uint32_t ch) const {

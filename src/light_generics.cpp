@@ -102,7 +102,8 @@ bool CompositeLight::addLight(GenericLight *gl, uint8_t id){
         return false;
 
     switch(ps){
-        case power_share_t::equal : {
+        case power_share_t::equal :
+        case power_share_t::phaseshift : {
             if (ls.size() == 1)
                 combined_value = node->light->getMaxValue();        // MaxValue will be the same for all sources defined by first added node
             break;
@@ -137,7 +138,8 @@ uint32_t CompositeLight::getValue_incremental() const {
 
 uint32_t CompositeLight::getValue() const {
     switch(ps){
-        case power_share_t::equal : {
+        case power_share_t::equal :
+        case power_share_t::phaseshift :{
             if (ls.size()){
                 return ls.head()->light->getValue() * ls.size();            // all lights are equal, get the first one and multiply by the number of lights
             }
@@ -196,16 +198,37 @@ void CompositeLight::goValueEqual(uint32_t value, uint32_t duration){
 
 void CompositeLight::goValueComposite(uint32_t value, uint32_t duration){
     if (!ls.size())
-        return;         // skip empty obj
+        return;         // skip if container is empty
 
     switch(ps){
         case power_share_t::equal :
             return goValueEqual(value, duration);
+        case power_share_t::phaseshift :
+            return goValuePhaseShift(value, duration);
         default :
             return goValueIncremental(value, duration);
     }
 }
 
+
+void CompositeLight::goValuePhaseShift(uint32_t value, uint32_t duration){
+    // check if we hold dimmable lights, otherwise use 'equal' control
+    if (ls.head()->light->getLType() != lightsource_t::dimmable)
+        return goValueEqual(value, duration);
+
+    // calculate per-source duty offset for phase-shifted PWM
+    int channel = 0;
+    for (auto _i = ls.begin(); _i != ls.end(); ++_i){
+        uint32_t duty_shift = value * channel % _i->get()->light->getMaxValue();
+          printf("Phase shifted PWM: ls:%d, duty:%d, phase:%d\n", channel, value, duty_shift);
+        ++channel;
+        DimmableLight *l = static_cast<DimmableLight*>(_i->get()->light.get());
+
+        l->setDutyShift(value, duty_shift);
+        if (duration)
+            l->fade_to_value(value, duration);
+    }
+}
 
 
 /*
