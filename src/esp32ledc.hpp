@@ -39,7 +39,7 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #define DEFAULT_PWM_FREQ            2000
 #define DEFAULT_PWM_RESOLUTION      LEDC_TIMER_10_BIT
 #define DEFAULT_PWM_CLK             LEDC_AUTO_CLK
-#define DEFAULT_PWM_DUTY            (1<<DEFAULT_PWM_RESOLUTION - 1)     // 50% duty
+#define DEFAULT_PWM_DUTY            0                   //  (1<<DEFAULT_PWM_RESOLUTION - 1)     // 50% duty
 #define DEFAULT_MAX_DUTY            ((1<<DEFAULT_PWM_RESOLUTION) - 1)
 
 #if configUSE_16_BIT_TICKS

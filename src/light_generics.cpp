@@ -72,6 +72,13 @@ float GenericLight::getCurrentPower() const {
     return getMaxPower() * getValue() / getMaxValue();
 }
 
+void GenericLight::goToggle(uint32_t duration){
+    if (getValue())
+        goOff();
+    else
+        goOn();
+}
+
 
 // CompositeLight methods
 CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : sub_type(gl->getLType()), ps(share), GenericLight(lightsource_t::composite, 0, gl->getCurve()){

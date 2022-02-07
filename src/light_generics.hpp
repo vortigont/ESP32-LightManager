@@ -69,7 +69,7 @@ public:
     inline virtual void goOn(uint32_t duration = DEFAULT_FADE_TIME){  return goMax(duration); };
     inline virtual void goOff(uint32_t duration = DEFAULT_FADE_TIME){ return goValue(0, duration); };
     inline virtual void goStep(int32_t step, uint32_t duration = DEFAULT_FADE_TIME){ return goValue( getValue() + step, duration); };
-
+    virtual void goToggle(uint32_t duration = DEFAULT_FADE_TIME);
     inline virtual void pwr(bool state, uint32_t duration = DEFAULT_FADE_TIME){ state ? goOn(duration) : goOff(duration); };
 
     virtual void goValueScaled(uint32_t value, uint32_t scale=100, uint32_t duration = DEFAULT_FADE_TIME);
