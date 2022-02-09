@@ -26,7 +26,7 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 #include "light_drv_ledc.hpp"
 
-void LEDCLight::fade_to_value(uint32_t value, uint32_t duration){
+void LEDCLight::fade_to_value(uint32_t value, int32_t duration){
     if (fc && duration)
         fc->fadebyTime(ch, value, duration);
     else

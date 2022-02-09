@@ -29,7 +29,10 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include <memory>
 #include "LList.h"
 
-#define DEFAULT_FADE_TIME           1000           // ms
+#define DEFAULT_FADE_TIME           1000            // ms
+#define DEFAULT_SCALE               100             // fits percent control 0%-100%
+#define DEFAULT_SCALE_STEP          10              // 10% step
+#define USE_DEFAULT                 -1              // Use light object's own setting
 
 enum class lightsource_t:uint8_t {
     generic,            // any unspecific light source
@@ -53,27 +56,37 @@ friend class CompositeLight;
 protected:
     lightsource_t const ltype;
     luma::curve luma;
+    int32_t fadetime = DEFAULT_FADE_TIME;           // default fade time duration
+    int32_t brtscale = DEFAULT_SCALE;               // default scale for brightness
+    int32_t increment = DEFAULT_SCALE / 10;         // default increment step
     float power;
 
     virtual void set_to_value(uint32_t value) = 0;            // pure virtual
-    virtual void fade_to_value(uint32_t value, uint32_t duration){ return set_to_value(value); };    // should be overriden with drivers supporting fade
+    virtual void fade_to_value(uint32_t value, int32_t duration){ return set_to_value(value); };    // should be overriden with drivers supporting fade
 
 public:
     GenericLight(lightsource_t type = lightsource_t::generic, float pwr = 1.0, luma::curve lcurve = luma::curve::linear) : ltype(type), power(pwr), luma(lcurve){};
     virtual ~GenericLight(){};
 
     // Brightness functions
-    virtual void goValue(uint32_t value, uint32_t duration = DEFAULT_FADE_TIME);
-    inline virtual void goMax(uint32_t duration = DEFAULT_FADE_TIME){ return goValue( getMaxValue(), duration); };
-    inline virtual void goMin(uint32_t duration = DEFAULT_FADE_TIME){ return goValue(1, duration); };
-    inline virtual void goOn(uint32_t duration = DEFAULT_FADE_TIME){  return goMax(duration); };
-    inline virtual void goOff(uint32_t duration = DEFAULT_FADE_TIME){ return goValue(0, duration); };
-    inline virtual void goStep(int32_t step, uint32_t duration = DEFAULT_FADE_TIME){ return goValue( getValue() + step, duration); };
-    virtual void goToggle(uint32_t duration = DEFAULT_FADE_TIME);
-    inline virtual void pwr(bool state, uint32_t duration = DEFAULT_FADE_TIME){ state ? goOn(duration) : goOff(duration); };
+    virtual void goValue(uint32_t value, int32_t duration = USE_DEFAULT);
 
-    virtual void goValueScaled(uint32_t value, uint32_t scale=100, uint32_t duration = DEFAULT_FADE_TIME);
-    virtual void goStepScaled(int32_t step, uint32_t scale=100, uint32_t duration = DEFAULT_FADE_TIME);
+    inline virtual void goMax(int32_t duration = USE_DEFAULT){ return goValue( getMaxValue(), duration); };
+    inline virtual void goMin(int32_t duration = USE_DEFAULT){ return goValue(1, duration); };
+    inline virtual void goOn(int32_t duration = USE_DEFAULT){  return goMax(duration); };
+    inline virtual void goOff(int32_t duration = USE_DEFAULT){ return goValue(0, duration); };
+    virtual void goToggle(int32_t duration = USE_DEFAULT);
+    virtual void   goIncr(int32_t duration = USE_DEFAULT){ return goStepScaled(increment, brtscale, duration); };
+    virtual void   goDecr(int32_t duration = USE_DEFAULT){ return goStepScaled(-1*increment, brtscale, duration); };
+
+    virtual void goStep(int32_t step, int32_t duration = USE_DEFAULT){ return goValue( getValue() + step, duration); };
+
+    virtual void  goStepScaled(int32_t step, int32_t scale=USE_DEFAULT, int32_t duration = USE_DEFAULT);
+
+    virtual void goValueScaled(uint32_t value, int32_t scale=USE_DEFAULT, int32_t duration = USE_DEFAULT);
+
+    inline virtual void pwr(bool state, int32_t duration = USE_DEFAULT){ state ? goOn(duration) : goOff(duration); };
+
 
     // set methods
     inline virtual luma::curve setCurve( luma::curve curve) { luma = curve; return luma; };
@@ -103,7 +116,7 @@ public:
 
     virtual uint32_t getValue() const = 0;                      // pure virtual
     virtual uint32_t getMaxValue() const = 0;                   // pure virtual
-    inline virtual uint32_t getValueScaled(uint32_t scale=100) const { return luma::curveUnMap(luma, getValue(), getMaxValue(), scale);};
+    inline virtual uint32_t getValueScaled(int32_t scale=USE_DEFAULT) const { return luma::curveUnMap(luma, getValue(), getMaxValue(), scale);};
 
     inline virtual luma::curve getCurve() const { return luma; };
 
@@ -183,7 +196,7 @@ class CompositeLight : public GenericLight {
      * 
      * @param value 
      */
-    void goValueIncremental(uint32_t value, uint32_t duration);
+    void goValueIncremental(uint32_t value, int32_t duration);
 
     /**
      * @brief Set the to value for equal-type lights
@@ -193,7 +206,7 @@ class CompositeLight : public GenericLight {
      * @param value - brightness value in range 0-MAX_BRIGHTNESS of a first light
      * @param duration - fade duration (if supported by backend driver)
      */
-    void goValueEqual(uint32_t value, uint32_t duration);
+    void goValueEqual(uint32_t value, int32_t duration);
 
     /**
      * @brief a selector for specific methods depending on power_share type
@@ -201,7 +214,7 @@ class CompositeLight : public GenericLight {
      * @param value
      * @param duration
      */
-    void goValueComposite(uint32_t value, uint32_t duration);
+    void goValueComposite(uint32_t value, int32_t duration);
 
     /**
      * @brief Set the to value for dimmable lights
@@ -216,11 +229,11 @@ class CompositeLight : public GenericLight {
      * @param value - brightness value in range 0-MAX_BRIGHTNESS of a first light
      * @param duration - fade duration (if supported by backend driver)
      */
-    void goValuePhaseShift(uint32_t value, uint32_t duration);
+    void goValuePhaseShift(uint32_t value, int32_t duration);
 
     // *** overrides *** //
     inline void set_to_value(uint32_t value) override { goValueComposite(value, 0); };
-    inline void fade_to_value(uint32_t value, uint32_t duration) override { goValueComposite(value, duration); };
+    inline void fade_to_value(uint32_t value, int32_t duration) override { goValueComposite(value, duration); };
 
 public:
     CompositeLight(lightsource_t type, power_share_t share = power_share_t::incremental) : sub_type(type), ps(share), GenericLight(lightsource_t::composite, 0){};

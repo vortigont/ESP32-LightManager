@@ -27,16 +27,31 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "light_generics.hpp"
 #include <string.h>
 
-void GenericLight::goValue(uint32_t value, uint32_t duration){
+// LOGGING
+#ifdef ARDUINO
+#include "esp32-hal-log.h"
+#else
+#include "esp_log.h"
+#endif
+
+static const char* TAG = "light_gnrc";
+
+void GenericLight::goValue(uint32_t value, int32_t duration){
 
     if(luma != luma::curve::linear)
         value = curveMap(luma, value, getMaxValue(), getMaxValue());        // map to luma curve if non-linear
 
-    printf("goValue val:%d, duration:%d\n", value, duration);
+    if (duration < 0)
+        duration = fadetime;
+
+    ESP_LOGD(TAG, "goValue val:%d, duration:%d\n", value, duration);
     fade_to_value(value, duration);
 };
 
-void GenericLight::goValueScaled(uint32_t value, uint32_t scale, uint32_t duration){
+void GenericLight::goValueScaled(uint32_t value, int32_t scale, int32_t duration){
+    if (scale <= 0)
+        scale = brtscale;
+
     if (value >= scale)
         return goMax(duration);
 
@@ -52,9 +67,11 @@ void GenericLight::goValueScaled(uint32_t value, uint32_t scale, uint32_t durati
         return set_to_value( curveMap(luma, value, getMaxValue(), scale) );
 }
 
-void GenericLight::goStepScaled(int32_t step, uint32_t scale, uint32_t duration){
+void GenericLight::goStepScaled(int32_t step, int32_t scale, int32_t duration){
     if (!step)
         return;
+    if (scale <= 0)
+        scale = brtscale;
 
     return goValueScaled(step + curveUnMap(luma, getValue(), getMaxValue(), scale), scale, duration);
 }
@@ -72,11 +89,11 @@ float GenericLight::getCurrentPower() const {
     return getMaxPower() * getValue() / getMaxValue();
 }
 
-void GenericLight::goToggle(uint32_t duration){
+void GenericLight::goToggle(int32_t duration){
     if (getValue())
-        goOff();
+        goOff(duration);
     else
-        goOn();
+        goOn(duration);
 }
 
 
@@ -182,7 +199,7 @@ luma::curve CompositeLight::setCurve( luma::curve curve){
 }
 
 
-void CompositeLight::goValueIncremental(uint32_t value, uint32_t duration){
+void CompositeLight::goValueIncremental(uint32_t value, int32_t duration){
     for (auto _i = ls.begin(); _i != ls.end(); ++_i){
         uint32_t m = _i->get()->light->getMaxValue();
 
@@ -197,13 +214,13 @@ void CompositeLight::goValueIncremental(uint32_t value, uint32_t duration){
     }
 }
 
-void CompositeLight::goValueEqual(uint32_t value, uint32_t duration){
+void CompositeLight::goValueEqual(uint32_t value, int32_t duration){
     for (auto _i = ls.begin(); _i != ls.end(); ++_i){
         _i->get()->light->fade_to_value(value, duration);
     }
 }
 
-void CompositeLight::goValueComposite(uint32_t value, uint32_t duration){
+void CompositeLight::goValueComposite(uint32_t value, int32_t duration){
     if (!ls.size())
         return;         // skip if container is empty
 
@@ -218,7 +235,7 @@ void CompositeLight::goValueComposite(uint32_t value, uint32_t duration){
 }
 
 
-void CompositeLight::goValuePhaseShift(uint32_t value, uint32_t duration){
+void CompositeLight::goValuePhaseShift(uint32_t value, int32_t duration){
     // check if we hold dimmable lights, otherwise use 'equal' control
     if (ls.head()->light->getLType() != lightsource_t::dimmable)
         return goValueEqual(value, duration);

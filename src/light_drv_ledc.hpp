@@ -36,7 +36,7 @@ class LEDCLight : public DimmableLight {
     FadeCtrl *fc;
 
     inline void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); };
-    void fade_to_value(uint32_t value, uint32_t duration) override;
+    void fade_to_value(uint32_t value, int32_t duration) override;
 
 public:
     LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0) : ch(channel), gpio(pin), fc(fader), DimmableLight(power, lcurve){
