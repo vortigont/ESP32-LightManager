@@ -93,23 +93,24 @@ public:
     virtual float setMaxPower(float p);
 
     /**
-     * @brief Invert light source control,
-     * i.e. inverse on/off logic or PWM active level
+     * @brief Set active logic level to HIGH or LOW
+     * i.e. could be required to inverse on/off logic or PWM active level
+     * default is HIGH
      * 
      * @param invert 
      * 
      * @return true 
      * @return false 
      */
-    virtual bool setInvertedLogic(bool invert){ return false; };
+    virtual bool setActiveLogicLevel(bool lvl){ return true; };
 
     /**
-     * @brief Check if light source has inverted logic
+     * @brief Get active logic level to HIGH or LOW
      * 
      * @return true if light is inverted
      * @return false otherwise
      */
-    virtual bool getInvertedLogic() const { return false; };
+    virtual bool getActiveLogicLevel() const { return true; };
 
     // get methods
     virtual lightsource_t getLType() const { return ltype; }

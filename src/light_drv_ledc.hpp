@@ -28,6 +28,11 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "light_generics.hpp"
 #include "esp32ledc_fader.hpp"
 
+/**
+ * @brief ESP32 LEDC engine light
+ * uses PWM engine for brighness and fade control
+ * 
+ */
 class LEDCLight : public DimmableLight {
 
     int gpio;
@@ -63,4 +68,58 @@ public:
 
     // Own methods
 
+};
+
+/**
+ * @brief A simple GPIO controlled light
+ * allows only on/off states, no PWM
+ * i.e. relays control, state led's etc
+ * 
+ */
+class GPIOLight : public GenericLight {
+
+    gpio_num_t gpio = GPIO_NUM_NC;      // GPIO used as output
+    bool all;                           // active logic level
+
+    inline void set_to_value(uint32_t value) override { gpio_set_level(gpio, (bool)value); };
+
+    /**
+     * @brief initialize gpio as output pin
+     * 
+     * @param pin 
+     * @param active_level active logic level, 'true' if HIGH, 'false' if LOW
+     */
+    void gpio_init(gpio_num_t pin, bool active_level);
+
+public:
+    GPIOLight(gpio_num_t pin, float power = 1.0, bool active_level = 1);
+    GPIOLight(int pin, float power = 1.0, bool active_level = 1);
+    virtual ~GPIOLight(){ gpio_set_level(gpio, 0); };   // keep gpio "low" on destruct
+
+    // *** Overrides *** //
+    virtual uint32_t getValue() const override { return gpio_get_level(gpio); };
+    virtual uint32_t getMaxValue() const override { return 1; };
+    virtual float getCurrentPower() const override { return getValue() ? power : 0; }
+
+    /**
+     * @brief Get active logic level
+     * 
+     * @return true if active logic level is HIGH
+     * @return false otherwise
+     */
+    virtual bool getActiveLogicLevel() const override { return all; };
+
+    /**
+     * @brief Set active logic level to HIGH or LOW
+     * i.e. could be required to inverse on/off logic or PWM active level
+     * default is HIGH
+     * 
+     * @param invert 
+     * 
+     * @return true 
+     * @return false 
+     */
+    virtual bool setActiveLogicLevel(bool lvl) override;
+
+    luma::curve setCurve( luma::curve curve) override { return luma; };
 };

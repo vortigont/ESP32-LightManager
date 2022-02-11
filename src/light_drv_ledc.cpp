@@ -46,3 +46,42 @@ void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
 
     pwm->chDutyPhase(ch, duty, dshift);
 }
+
+GPIOLight::GPIOLight(gpio_num_t pin, float power, bool lvl) : all(lvl), GenericLight(lightsource_t::constant, power, luma::curve::binary){
+    gpio_init(pin, lvl);
+}
+
+GPIOLight::GPIOLight(int pin, float power, bool lvl) : all(lvl), GenericLight(lightsource_t::constant, power, luma::curve::binary){
+    gpio_init(static_cast<gpio_num_t>(pin), lvl);
+}
+
+void GPIOLight::gpio_init(gpio_num_t pin, bool active_level){
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)){
+        //ESP_LOGE(TAG, "pin:%d can't be used as OUTPUT\n", pin);
+        gpio = GPIO_NUM_NC;
+        return;
+    }
+
+    gpio_reset_pin(gpio);
+
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = 1 << gpio;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    // Invert pin logic level if required
+    if (!all)
+        GPIO.func_out_sel_cfg[gpio].inv_sel = 1;
+
+    gpio_set_level(gpio, 0);        // initialize as "disabled" or "off"
+}
+
+bool GPIOLight::setActiveLogicLevel(bool lvl){
+    all = lvl;
+    GPIO.func_out_sel_cfg[gpio].inv_sel = !all;
+    return all;
+}
