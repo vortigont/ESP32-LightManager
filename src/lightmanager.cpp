@@ -82,7 +82,7 @@ bool Eclo::evt_subscribe(esp_event_base_t base, int32_t id){
 }
 
 void Eclo::event_picker(esp_event_base_t base, light_event_id_t evid, void* event_data){
-    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, evid);
+    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, (int)evid);
 
     if (base == LCMD_EVENTS){
         local_cmd_evt *cmd = reinterpret_cast<local_cmd_evt*>(event_data);

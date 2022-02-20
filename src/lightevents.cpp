@@ -91,6 +91,6 @@ esp_event_loop_handle_t* get_light_evts_loop(){
 uint64_t mk_uuid(uint16_t id){
     uint64_t uuid;
     esp_efuse_mac_get_default((uint8_t*)uuid);
-    uuid << 16;
+    uuid <<= 16;
     return uuid |= id;
 };
