@@ -26,6 +26,14 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 #include "esp32ledc.hpp"
 
+#ifdef ARDUINO
+#include "esp32-hal-log.h"
+#else
+#include "esp_log.h"
+#endif
+
+// ESP32 log tag
+static const char *TAG __attribute__((unused)) = "LEDC";
 
 // static member must be defined outside the class scope
 EventGroupHandle_t PWMCtl::g_fade_evt = nullptr;

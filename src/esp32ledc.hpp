@@ -30,12 +30,6 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "freertos/event_groups.h"
 #include "driver/ledc.h"
 
-#ifdef ARDUINO
-#include "esp32-hal-log.h"
-#else
-#include "esp_log.h"
-#endif
-
 #define DEFAULT_PWM_FREQ            2000
 #define DEFAULT_PWM_RESOLUTION      LEDC_TIMER_10_BIT
 #define DEFAULT_PWM_CLK             LEDC_AUTO_CLK
@@ -54,9 +48,6 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #define BIT_SET(var, bit) (var |= 1<<bit)
 #define BIT_CLR(var, bit) (var &= ~(1<<bit))
 #define BIT_READ(var, bit) ((var >> bit) & 1)
-
-// ESP32 log tag
-static const char *TAG __attribute__((unused)) = "LEDC";
 
 /*
 refs:
