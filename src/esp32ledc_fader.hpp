@@ -27,17 +27,26 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #pragma once
 #include "esp32ledc.hpp"
 #include "luma_curves.hpp"
+#include <functional>
 
 
 #define DEFAULT_FADE_TIME           1000           // ms
 
-
+// a list of implemented fade engines
 enum class fade_engine_t:uint8_t { none, linear_hw };
+
+// a list of fade engine events
+enum class fade_event_t:uint8_t {
+    fade_start,
+    fade_end
+};
+
+// fade controller callback type
+typedef std::function<void (uint32_t channel, fade_event_t event)> fe_callback_t;
 
 /**
  * @brief Abstract Null-Fader implementation algoritm
- * it does not fade anything, it just changes PWM duty as-is
- * any specific implementation is meant for derived classes
+ * it does not fade anything, any specific implementation is meant for derived classes
  */
 class FadeEngine {
 
@@ -73,9 +82,10 @@ public:
 
 
 struct ChannelFader {
-    bool state = 0;
+    //bool state = 0;
     //luma::curve l_curve = luma::curve::linear;     // luma curve correction for relative methods (like xxPercent)
     FadeEngine *fe = nullptr;
+    fe_callback_t cb = nullptr;
 };
 
 // Fade controller class
@@ -102,10 +112,10 @@ class FadeCtrl {
 
 public:
     FadeCtrl( uint32_t mask = CH_EVENTS_BIT_MASK );
-    ~FadeCtrl();
+    ~FadeCtrl();    // todo: destruct faders
 
 
-    bool setFader(uint8_t ch, fade_engine_t fe);
+    bool setFader(uint8_t ch, fade_engine_t fe, fe_callback_t f = nullptr );
     bool fadebyTime(uint8_t ch, uint32_t duty, uint32_t duration);
 
     //void setCurve(uint8_t ch, luma::curve curve){ ch %= LEDC_SPEED_MODE_MAX * LEDC_TIMER_MAX; chf[ch].l_curve = curve; }

@@ -26,6 +26,15 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 #include "esp32ledc_fader.hpp"
 
+// LOGGING
+#ifdef ARDUINO
+#include "esp32-hal-log.h"
+#else
+#include "esp_log.h"
+#endif
+
+static const char* TAG = "ledc_fader";
+
 #define EVT_TASK_NAME   "FADE_EVT"
 #define EVT_TASK_STACK  2048
 #define EVT_TASK_PRIO   2
@@ -65,7 +74,7 @@ FadeCtrl::FadeCtrl( uint32_t mask ) : events_mask(mask){
   pwm = PWMCtl::getInstance();
   eg_fade_evt = pwm->getFaderEventGroup();
 
-  //Create a task to handle UART event from ISR
+  //Create a task to handle fade events from ISR
   if (eg_fade_evt)
     xTaskCreate(FadeCtrl::evtTask, EVT_TASK_NAME, EVT_TASK_STACK, (void *)this, EVT_TASK_PRIO, &t_fade_evt);
 
@@ -76,7 +85,7 @@ FadeCtrl::~FadeCtrl(){
 }
 
 void FadeCtrl::fd_events_handler(){
-  printf("Start fade events listener task\n");
+  ESP_LOGI(TAG, "Start fade events listener task");
 
   EventBits_t x;
 
@@ -88,32 +97,38 @@ void FadeCtrl::fd_events_handler(){
       pdFALSE,        // any bit set triggers event
       (portTickType)portMAX_DELAY
     );
-    printf("Got event notification for channels:");
 
     //x &= events_mask;
     int i = 0;
     do {
       if (x & 1){
-        printf(" %d", i);
+        ESP_LOGD(TAG, "fade end event ch:%d\n", i);
+        if (chf[i].cb)
+          chf[i].cb(i, fade_event_t::fade_end);
+        //printf(" %d", i);
       }
       x >>= 1;
     } while (++i < LEDC_CHANNEL_MAX);
-    printf("\n");
+    //printf("\n");
   }
   vTaskDelete(NULL);
 }
 
 bool FadeCtrl::nofade(uint8_t ch, uint32_t duty){
-    printf("nofade ch:%d, duty:%d\n", ch, duty);
+    ESP_LOGD(TAG, "nofade ch:%d, duty:%d\n", ch, duty);
     return PWMCtl::getInstance()->chDuty(ch, duty);
 };
 
-bool FadeCtrl::setFader(uint8_t ch, fade_engine_t fe){
+bool FadeCtrl::setFader(uint8_t ch, fade_engine_t fe, fe_callback_t f){
     ch %= LEDC_SPEED_MODE_MAX*LEDC_CHANNEL_MAX;
 
-    printf("setFader ch:%d, err:%d\n", ch, PWMCtl::getInstance()->chFadeISR(ch, true));
-    //PWMCtl::getInstance()->chFadeISR(ch, true);
+    ESP_LOGD(TAG, "setFader ch:%d, err:%d\n", ch, PWMCtl::getInstance()->chFadeISR(ch, true));
+    //printf("setFader ch:%d, err:%d\n", ch, PWMCtl::getInstance()->chFadeISR(ch, true));
 
+    if (f)
+      chf[ch].cb = std::move(f);
+
+    // todo: пересоздавать объект при повторном вызове или пропускать?
     if (!chf[ch].fe){
       chf[ch].fe = new FadeEngineHW(ch);
       return chf[ch].fe ? true : false;
@@ -128,6 +143,11 @@ bool FadeCtrl::fadebyTime(uint8_t ch, uint32_t duty, uint32_t duration){
       return nofade(ch, duty);  // do a no-fade duty change if no FadeEngine installed for the channel 
     }
 
-    return chf[ch].fe->fade(duty, duration);
+    if(chf[ch].fe->fade(duty, duration)){
+      if (chf[ch].cb)
+        chf[ch].cb(ch, fade_event_t::fade_start);
+      return true;
+    } else
+      return false;
 }
 
