@@ -27,12 +27,17 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #pragma once
 #include "luma_curves.hpp"
 #include <memory>
+#include <functional>
 #include "LList.h"
 
 #define DEFAULT_FADE_TIME           1000            // ms
 #define DEFAULT_SCALE               100             // fits percent control 0%-100%
 #define DEFAULT_SCALE_STEP          10              // 10% step
 #define USE_DEFAULT                 -1              // Use light object's own setting
+
+
+typedef std::function<void ()> callback_t;
+//typedef std::function<void (event_t event, const event_args*)> callback_t;
 
 enum class lightsource_t:uint8_t {
     generic,            // any unspecific light source
@@ -55,13 +60,33 @@ friend class CompositeLight;
 
 protected:
     lightsource_t const ltype;
+    float power;
     luma::curve luma;
     int32_t fadetime = DEFAULT_FADE_TIME;           // default fade time duration
     int32_t brtscale = DEFAULT_SCALE;               // default scale for brightness
     int32_t increment = DEFAULT_SCALE / 10;         // default increment step
-    float power;
 
+    callback_t callback = nullptr;                  // external callback function to call on state change
+
+    /**
+     * @brief run external callback function
+     * every time objects state changes a callback triggered to notify
+     */
+    virtual void onChange(){ if (callback) callback(); };
+
+    /**
+     * @brief set normalized power/brightness level
+     * 
+     * @param value - normalized value
+     */
     virtual void set_to_value(uint32_t value) = 0;            // pure virtual
+
+    /**
+     * @brief fade power/brightness to normalized value
+     * if fade is not implemented than a direct set_to_value() called
+     * @param value - normalized value
+     * @param duration - fade duration in ms
+     */
     virtual void fade_to_value(uint32_t value, int32_t duration){ return set_to_value(value); };    // should be overriden with drivers supporting fade
 
 public:
@@ -117,13 +142,27 @@ public:
 
     virtual uint32_t getValue() const = 0;                      // pure virtual
     virtual uint32_t getMaxValue() const = 0;                   // pure virtual
-    inline virtual uint32_t getValueScaled(int32_t scale=USE_DEFAULT) const { return luma::curveUnMap(luma, getValue(), getMaxValue(), scale);};
+    virtual uint32_t getValueScaled(int32_t scale=USE_DEFAULT) const;
 
     inline virtual luma::curve getCurve() const { return luma; };
 
     virtual float getMaxPower() const { return power; }
     virtual float getCurrentPower() const;
 
+
+    /**
+     * @brief attach external callback function
+     * every time objects state changes a callback triggered to notify
+     * 
+     * @param f callback function prototype: std::function<void ()>
+     */
+    void onChangeAttach(callback_t f){ if (f) callback = std::move(f); };
+
+    /**
+     * @brief detach external callback function
+     * 
+     */
+    void onChangeDetach(){ callback = nullptr; };
 };
 
 
@@ -219,7 +258,7 @@ class CompositeLight : public GenericLight {
 
     /**
      * @brief Set the to value for dimmable lights
-     * operates like goValueEqual() with an additionfor PWM drivers
+     * operates like goValueEqual() with an addition for PWM drivers
      * supporting per channel phase control. Resulting waveforms would be
      * shifted in time to achive as much uniform load as possible.
      * The goal is make PWM dimming more even-spreaded
@@ -237,7 +276,7 @@ class CompositeLight : public GenericLight {
     inline void fade_to_value(uint32_t value, int32_t duration) override { goValueComposite(value, duration); };
 
 public:
-    CompositeLight(lightsource_t type, power_share_t share = power_share_t::incremental) : sub_type(type), ps(share), GenericLight(lightsource_t::composite, 0){};
+    CompositeLight(lightsource_t type, power_share_t share = power_share_t::incremental) : GenericLight(lightsource_t::composite, 0), sub_type(type), ps(share){};
     CompositeLight(GenericLight *gl, uint8_t id = 1, power_share_t share = power_share_t::incremental);
 
     // *** Parent Methods Overrides ***

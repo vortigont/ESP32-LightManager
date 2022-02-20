@@ -58,22 +58,21 @@ void GenericLight::goValueScaled(uint32_t value, int32_t scale, int32_t duration
     if (value == 0)
         return goOff(duration);
 
-    printf("goValueScaled: val:%d, duration:%d, md: %d\n", value, duration, getMaxValue());
-    //printf("CurveMap: c:%d, val:%d, maxd:%d, scale: %d\n", chf[ch].l_curve, value, PWMCtl::getInstance()->chGetMaxDuty(ch), scale);
+    ESP_LOGD(TAG, "val:%d, scale:%d, duration:%d\n", value, scale, duration);
 
-    if (duration)
-        return fade_to_value( curveMap(luma, value, getMaxValue(), scale), duration );
-    else
-        return set_to_value( curveMap(luma, value, getMaxValue(), scale) );
+    return fade_to_value( curveMap(luma, value, getMaxValue(), scale), duration );
 }
 
 void GenericLight::goStepScaled(int32_t step, int32_t scale, int32_t duration){
     if (!step)
         return;
-    if (scale <= 0)
-        scale = brtscale;
 
-    return goValueScaled(step + curveUnMap(luma, getValue(), getMaxValue(), scale), scale, duration);
+    uint32_t cur = getValueScaled(scale);
+    if (cur + step <= 0)     // do not go to negative
+        return goOff();
+
+    ESP_LOGD(TAG, "step:%d, scale: %d, current value:%d, new value:%d duration:%d\n", step, scale, cur, step + cur, duration);
+    return goValueScaled(step + cur, scale, duration);
 }
 
 float GenericLight::setMaxPower(float p){
@@ -96,9 +95,18 @@ void GenericLight::goToggle(int32_t duration){
         goOn(duration);
 }
 
+uint32_t GenericLight::getValueScaled(int32_t scale) const {
+    if (scale <=0)
+        scale = brtscale;
+    return luma::curveUnMap(luma, getValue(), getMaxValue(), scale);
+}
 
+
+
+
+// ********************************************************
 // CompositeLight methods
-CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : sub_type(gl->getLType()), ps(share), GenericLight(lightsource_t::composite, 0, gl->getCurve()){
+CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : GenericLight(lightsource_t::composite, 0, gl->getCurve()), sub_type(gl->getLType()), ps(share) {
     combined_value = 0;
     addLight(gl, id);
 };
@@ -132,7 +140,7 @@ bool CompositeLight::addLight(GenericLight *gl, uint8_t id){
                 combined_value = node->light->getMaxValue();        // MaxValue will be the same for all sources defined by first added node
             break;
         }
-        default : {
+        default : {                                                 // default is sum up max values of all lights
             combined_value += node->light->getMaxValue();
         }
     }
@@ -165,8 +173,9 @@ uint32_t CompositeLight::getValue() const {
         case power_share_t::equal :
         case power_share_t::phaseshift :{
             if (ls.size()){
-                return ls.head()->light->getValue() * ls.size();            // all lights are equal, get the first one and multiply by the number of lights
+                return ls.head()->light->getValue();                    // all lights are equal, get the first one and return it's value
             }
+            return 0;
         }
         default :
             return getValue_incremental();
