@@ -25,8 +25,17 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 */
 
 #include "light_drv_ledc.hpp"
+// LOGGING
+#ifdef ARDUINO
+#include "esp32-hal-log.h"
+#else
+#include "esp_log.h"
+#endif
 
 void LEDCLight::fade_to_value(uint32_t value, int32_t duration){
+    if (duration < 0)
+        duration = fadetime;
+
     if (fc && duration)
         fc->fadebyTime(ch, value, duration);
     else
@@ -47,31 +56,45 @@ void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
     pwm->chDutyPhase(ch, duty, dshift);
 }
 
-GPIOLight::GPIOLight(gpio_num_t pin, float power, bool lvl) : all(lvl), GenericLight(lightsource_t::constant, power, luma::curve::binary){
+bool LEDCLight::setActiveLogicLevel(bool lvl){
+    pwm->chSet(ch, gpio, !lvl, !lvl);    // invert LED logic level
+    return lvl;
+}
+
+void LEDCLight::onFadeEvent(uint32_t fch, fade_event_t e){
+    if (fch == ch && e == fade_event_t::fade_end)       // fade_start пока не нужен
+        onChange();
+}
+
+
+
+/* **** GPIOLight Implementation    **** */
+
+GPIOLight::GPIOLight(gpio_num_t pin, float power, bool lvl) : GenericLight(lightsource_t::constant, power, luma::curve::binary), all(lvl){
     gpio_init(pin, lvl);
 }
 
-GPIOLight::GPIOLight(int pin, float power, bool lvl) : all(lvl), GenericLight(lightsource_t::constant, power, luma::curve::binary){
+GPIOLight::GPIOLight(int pin, float power, bool lvl) : GenericLight(lightsource_t::constant, power, luma::curve::binary), all(lvl){
     gpio_init(static_cast<gpio_num_t>(pin), lvl);
 }
 
 void GPIOLight::gpio_init(gpio_num_t pin, bool active_level){
     if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)){
-        //ESP_LOGE(TAG, "pin:%d can't be used as OUTPUT\n", pin);
-        gpio = GPIO_NUM_NC;
+        ESP_LOGE(TAG, "pin:%d can't be used as OUTPUT\n", pin);
         return;
-    }
-
-    gpio_reset_pin(gpio);
+    } else
+        gpio = pin;
 
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = 1 << gpio;
+    io_conf.mode = GPIO_MODE_INPUT_OUTPUT;
+    io_conf.pin_bit_mask = BIT64(gpio);
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     //configure GPIO with the given settings
     gpio_config(&io_conf);
+
+    //gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
 
     // Invert pin logic level if required
     if (!all)
@@ -85,3 +108,16 @@ bool GPIOLight::setActiveLogicLevel(bool lvl){
     GPIO.func_out_sel_cfg[gpio].inv_sel = !all;
     return all;
 }
+
+void GPIOLight::set_to_value(uint32_t value){
+    ESP_LOGI(TAG, "gpio:%d set OUTPUT:%d\n", gpio, value ? 1 : 0);
+
+    gpio_set_level(gpio, value ? 1 : 0);
+    onChange();
+};
+
+uint32_t GPIOLight::getValue() const { 
+    int out = all ? gpio_get_level(gpio) : !gpio_get_level(gpio);
+    ESP_LOGI(TAG, "gpio:%d val:%d\n", gpio, out);
+    return out;
+};

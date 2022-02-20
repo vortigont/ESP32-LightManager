@@ -28,6 +28,8 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "light_generics.hpp"
 #include "esp32ledc_fader.hpp"
 
+static const char* TAG = "light_gnrc";
+
 /**
  * @brief ESP32 LEDC engine light
  * uses PWM engine for brighness and fade control
@@ -35,28 +37,43 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
  */
 class LEDCLight : public DimmableLight {
 
-    int gpio;
     uint32_t ch;
+    int gpio;
     PWMCtl *pwm;
     FadeCtrl *fc;
 
-    inline void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); };
+    inline void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); onChange(); };
     void fade_to_value(uint32_t value, int32_t duration) override;
 
+    void onFadeEvent(uint32_t fch, fade_event_t e);
+
 public:
-    LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0) : ch(channel), gpio(pin), fc(fader), DimmableLight(power, lcurve){
+    LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0) : DimmableLight(power, lcurve), ch(channel), gpio(pin), fc(fader){
         pwm = PWMCtl::getInstance();
-        pwm->chStart(ch, gpio);
+        if (!pwm->chStart(ch, gpio))
+            fc->setFader(ch, fade_engine_t::linear_hw);     // attach to fader if channel init had no issues
     };
     virtual ~LEDCLight(){};
 
     PWMCtl *pwmGet(){ return pwm; };
 
     // *** Overrides *** //
-    uint32_t getValue() const override { return PWMCtl::getInstance()->chGetDuty(ch); };
-    uint32_t getMaxValue() const override { return PWMCtl::getInstance()->chGetMaxDuty(ch); };
+    uint32_t getValue()     const override { return PWMCtl::getInstance()->chGetDuty(ch); };
+    uint32_t getMaxValue()  const override { return PWMCtl::getInstance()->chGetMaxDuty(ch); };
 
     void setPWM(uint8_t resolution, uint32_t freq) override;
+
+    /**
+     * @brief Set active logic level to HIGH or LOW
+     * i.e. could be required to inverse on/off logic or PWM active level
+     * default is HIGH
+     * 
+     * @param invert 
+     * 
+     * @return true 
+     * @return false 
+     */
+    bool setActiveLogicLevel(bool lvl) override;
 
     /**
      * @brief Set the Duty Shift for PWM channel
@@ -81,7 +98,7 @@ class GPIOLight : public GenericLight {
     gpio_num_t gpio = GPIO_NUM_NC;      // GPIO used as output
     bool all;                           // active logic level
 
-    inline void set_to_value(uint32_t value) override { gpio_set_level(gpio, (bool)value); };
+    void set_to_value(uint32_t value) override;
 
     /**
      * @brief initialize gpio as output pin
@@ -94,10 +111,10 @@ class GPIOLight : public GenericLight {
 public:
     GPIOLight(gpio_num_t pin, float power = 1.0, bool active_level = 1);
     GPIOLight(int pin, float power = 1.0, bool active_level = 1);
-    virtual ~GPIOLight(){ gpio_set_level(gpio, 0); };   // keep gpio "low" on destruct
+    virtual ~GPIOLight(){ gpio_set_level(gpio, 0); };   // set gpio logicaly "low" on destruct
 
     // *** Overrides *** //
-    virtual uint32_t getValue() const override { return gpio_get_level(gpio); };
+    virtual uint32_t getValue() const override;
     virtual uint32_t getMaxValue() const override { return 1; };
     virtual float getCurrentPower() const override { return getValue() ? power : 0; }
 
