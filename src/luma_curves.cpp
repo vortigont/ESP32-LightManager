@@ -107,14 +107,14 @@ uint32_t map_linear(uint32_t l, uint32_t max_duty, uint32_t max_l){
     if (l >= max_l)
         return max_duty;
 
-    return max_duty * l / max_l;
+    return round(max_duty * l / max_l);
 }
 
 uint32_t unmap_linear(uint32_t duty, uint32_t max_duty, uint32_t max_l){
     if (duty >= max_duty)
         return max_l;
 
-    return duty * max_l / max_duty;
+    return round(duty * max_l / max_duty);
 }
 
 uint32_t map_cie1931(uint32_t l, uint32_t max_duty, uint32_t max_l){
@@ -140,11 +140,11 @@ uint32_t unmap_cie1931(uint32_t duty, uint32_t max_duty, uint32_t max_l){
 
     float x = float(duty) / max_duty;
 
-    if (x * 902.3 < 8.0){
-        return x * 902.3 * max_l / 100;
+    if (x * 902.3 <= 8.0){
+        return round(x * 902.3 * max_l / 100);
     }
     else {
-        return (cbrtf(x) * 116.0 - 16.0) * max_l / 100;
+        return round((cbrtf(x) * 116.0 - 16.0) * max_l / 100);
     }
 }
 
@@ -167,7 +167,7 @@ uint32_t unmap_exponent(uint32_t duty, uint32_t max_duty, uint32_t max_l){
         return 0;
 
     float scalingFactor = float(max_l) * log10(2) / log10(max_duty);
-    return scalingFactor * log2(duty + 1);
+    return round(scalingFactor * log2(duty + 1));
 }
 
 uint32_t map_sine(uint32_t l, uint32_t max_duty, uint32_t max_l){
@@ -189,7 +189,7 @@ uint32_t unmap_sine(uint32_t duty, uint32_t max_duty, uint32_t max_l){
         return 0;
 
     float uduty = (asinf(float(duty) * 2 / max_duty - 1) + HALF_PI) * max_duty / PI;
-    return uduty * max_l / max_duty;
+    return round(uduty * max_l / max_duty);
 }
 
 uint32_t map_square(uint32_t l, uint32_t max_duty, uint32_t max_l){
@@ -211,7 +211,7 @@ uint32_t unmap_square(uint32_t duty, uint32_t max_duty, uint32_t max_l){
         return 0;
 
     float uduty = (asinf(float(duty) * 2 / max_duty - 1) + HALF_PI) * max_duty / PI;
-    return uduty * max_l / max_duty;
+    return round(uduty * max_l / max_duty);
 }
 
 } // namespace luma
