@@ -32,6 +32,17 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "esp_log.h"
 #endif
 
+#define PWM PWMCtl::getInstance()
+
+LEDCLight::LEDCLight(uint32_t channel, int pin, FadeCtrl *fader, luma::curve lcurve, float power) : DimmableLight(power, lcurve), ch(channel), gpio(pin), fc(fader){
+    if (!PWM->chStart(ch, gpio) && fc){              // attach to fader if channel init had no issues and we have a proper FadeController pointer
+        fc->setFader(ch,
+            fade_engine_t::linear_hw,
+            [this](uint32_t c, fade_event_t e){ onFadeEvent(c, e); }        // lamda passing callback to local method
+        );
+    }
+}
+
 void LEDCLight::fade_to_value(uint32_t value, int32_t duration){
     if (duration < 0)
         duration = fadetime;
@@ -40,29 +51,30 @@ void LEDCLight::fade_to_value(uint32_t value, int32_t duration){
         fc->fadebyTime(ch, value, duration);
     else
         set_to_value(value);
-};
+}
 
 void LEDCLight::setPWM(uint8_t resolution, uint32_t freq){
     if (resolution >= LEDC_TIMER_BIT_MAX)
         resolution = LEDC_TIMER_BIT_MAX - 1;
 
-    pwm->tmSet(pwm->chGetTimernum(ch), (ledc_timer_bit_t)resolution, freq);
+    PWM->tmSet(PWM->chGetTimernum(ch), (ledc_timer_bit_t)resolution, freq);
 }
 
 void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
     if (dshift > getMaxValue())
         dshift = getMaxValue();
 
-    pwm->chDutyPhase(ch, duty, dshift);
+    PWM->chDutyPhase(ch, duty, dshift);
 }
 
 bool LEDCLight::setActiveLogicLevel(bool lvl){
-    pwm->chSet(ch, gpio, !lvl, !lvl);    // invert LED logic level
+    PWM->chSet(ch, gpio, !lvl, !lvl);    // invert LED logic level
     return lvl;
 }
 
 void LEDCLight::onFadeEvent(uint32_t fch, fade_event_t e){
-    if (fch == ch && e == fade_event_t::fade_end)       // fade_start пока не нужен
+    // (fch == ch)  - all calls are for local channel only
+    if (e == fade_event_t::fade_end)       // fade_start пока не нужен
         onChange();
 }
 
@@ -114,10 +126,16 @@ void GPIOLight::set_to_value(uint32_t value){
 
     gpio_set_level(gpio, value ? 1 : 0);
     onChange();
-};
+}
 
 uint32_t GPIOLight::getValue() const { 
     int out = all ? gpio_get_level(gpio) : !gpio_get_level(gpio);
     ESP_LOGI(TAG, "gpio:%d val:%d\n", gpio, out);
     return out;
-};
+}
+
+uint32_t GPIOLight::getValueScaled(int32_t scale) const {
+    if (scale <= 0)
+        scale = brtscale;
+    return getValue() ? scale : 0;
+}

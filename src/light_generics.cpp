@@ -44,7 +44,7 @@ void GenericLight::goValue(uint32_t value, int32_t duration){
     if (duration < 0)
         duration = fadetime;
 
-    ESP_LOGD(TAG, "goValue val:%d, duration:%d\n", value, duration);
+    ESP_LOGD(TAG, "goValue val:%d, duration:%d", value, duration);
     fade_to_value(value, duration);
 };
 
@@ -101,6 +101,22 @@ uint32_t GenericLight::getValueScaled(int32_t scale) const {
     return luma::curveUnMap(luma, getValue(), getMaxValue(), scale);
 }
 
+light_state_t GenericLight::getState() const{
+    light_state_t state = {
+        ltype,      //    lightsource_t ltype;
+        luma,       //    luma::curve luma;
+        fadetime,   //    int32_t fadetime;           // default fade time duration
+        brtscale,   //    int32_t brtscale;           // default scale for brightness
+        increment,  //    int32_t increment;          // default increment step
+        getValue(), //    uint32_t value;
+        getMaxValue(),          //    uint32_t value_max;
+        getValueScaled(),       //    uint32_t value_scaled;
+        getCurrentPower(),      //    float power;
+        power,                  //    float power_max;
+        getActiveLogicLevel()   //    bool active_ll;             // active logic level
+    };
+    return state;
+}
 
 
 
@@ -109,7 +125,7 @@ uint32_t GenericLight::getValueScaled(int32_t scale) const {
 CompositeLight::CompositeLight(GenericLight *gl, uint8_t id, power_share_t share) : GenericLight(lightsource_t::composite, 0, gl->getCurve()), sub_type(gl->getLType()), ps(share) {
     combined_value = 0;
     addLight(gl, id);
-};
+}
 
 bool CompositeLight::exist(uint8_t id) const {
     for (auto _i = ls.cbegin(); _i != ls.cend(); ++_i){

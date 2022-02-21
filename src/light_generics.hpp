@@ -25,7 +25,7 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 */
 
 #pragma once
-#include "luma_curves.hpp"
+#include "light_types.hpp"
 #include <memory>
 #include <functional>
 #include "LList.h"
@@ -38,21 +38,6 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 typedef std::function<void ()> callback_t;
 //typedef std::function<void (event_t event, const event_args*)> callback_t;
-
-enum class lightsource_t:uint8_t {
-    generic,            // any unspecific light source
-    constant,           // i.e. ordinary lamps
-    dimmable,           // dimmable sources
-    rgb,                // any rgb's, including rgbw, rgbww, etc...
-    dynamic,            // all kinds of addressable leds, etc...
-    composite           // light units with more than one light source
-};
-
-enum class power_share_t:uint8_t {
-    incremental,        // a set of lights combined
-    equal,              // all sources are constantly equal
-    phaseshift          // sources try to do max load in a round robbin time slots (phase-shifted PWM)
-};
 
 
 class GenericLight {
@@ -129,6 +114,10 @@ public:
      */
     virtual bool setActiveLogicLevel(bool lvl){ return true; };
 
+
+    // get methods
+
+
     /**
      * @brief Get active logic level to HIGH or LOW
      * 
@@ -137,7 +126,6 @@ public:
      */
     virtual bool getActiveLogicLevel() const { return true; };
 
-    // get methods
     virtual lightsource_t getLType() const { return ltype; }
 
     virtual uint32_t getValue() const = 0;                      // pure virtual
@@ -149,6 +137,12 @@ public:
     virtual float getMaxPower() const { return power; }
     virtual float getCurrentPower() const;
 
+    /**
+     * @brief Get the State object
+     * 
+     * @return light_state_t generic light object structure
+     */
+    virtual light_state_t getState() const;
 
     /**
      * @brief attach external callback function

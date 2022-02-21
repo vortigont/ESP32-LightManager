@@ -102,10 +102,9 @@ void FadeCtrl::fd_events_handler(){
     int i = 0;
     do {
       if (x & 1){
-        ESP_LOGD(TAG, "fade end event ch:%d\n", i);
+        ESP_LOGD(TAG, "fade end event ch:%d", i);
         if (chf[i].cb)
-          chf[i].cb(i, fade_event_t::fade_end);
-        //printf(" %d", i);
+          chf[i].cb(i, fade_event_t::fade_end);   // trigger callback with 'fade_end'
       }
       x >>= 1;
     } while (++i < LEDC_CHANNEL_MAX);
@@ -116,6 +115,7 @@ void FadeCtrl::fd_events_handler(){
 
 bool FadeCtrl::nofade(uint8_t ch, uint32_t duty){
     ESP_LOGD(TAG, "nofade ch:%d, duty:%d\n", ch, duty);
+    //TODO: деграть коллбек с событием fade-end несмотря на то что затухания не было
     return PWMCtl::getInstance()->chDuty(ch, duty);
 };
 
@@ -123,10 +123,11 @@ bool FadeCtrl::setFader(uint8_t ch, fade_engine_t fe, fe_callback_t f){
     ch %= LEDC_SPEED_MODE_MAX*LEDC_CHANNEL_MAX;
 
     ESP_LOGD(TAG, "setFader ch:%d, err:%d\n", ch, PWMCtl::getInstance()->chFadeISR(ch, true));
-    //printf("setFader ch:%d, err:%d\n", ch, PWMCtl::getInstance()->chFadeISR(ch, true));
 
     if (f)
       chf[ch].cb = std::move(f);
+
+    // todo: fade_engine_t fe може опделеять движек отличный от ledc hw
 
     // todo: пересоздавать объект при повторном вызове или пропускать?
     if (!chf[ch].fe){
@@ -143,9 +144,9 @@ bool FadeCtrl::fadebyTime(uint8_t ch, uint32_t duty, uint32_t duration){
       return nofade(ch, duty);  // do a no-fade duty change if no FadeEngine installed for the channel 
     }
 
-    if(chf[ch].fe->fade(duty, duration)){
+    if(chf[ch].fe->fade(duty, duration)){     // run async fade
       if (chf[ch].cb)
-        chf[ch].cb(ch, fade_event_t::fade_start);
+        chf[ch].cb(ch, fade_event_t::fade_start);     // trigger callback with 'fade_start'
       return true;
     } else
       return false;

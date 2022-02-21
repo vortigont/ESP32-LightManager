@@ -39,23 +39,24 @@ class LEDCLight : public DimmableLight {
 
     uint32_t ch;
     int gpio;
-    PWMCtl *pwm;
     FadeCtrl *fc;
 
     inline void set_to_value(uint32_t value) override { PWMCtl::getInstance()->chDuty(ch, value); onChange(); };
     void fade_to_value(uint32_t value, int32_t duration) override;
 
+    /**
+     * @brief callback function for fader events
+     * called asychroneously
+     * @param fch   - ledc channel triggered event (suposed to be a channel of this class instance)
+     * @param e     - fader event type
+     */
     void onFadeEvent(uint32_t fch, fade_event_t e);
 
 public:
-    LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0) : DimmableLight(power, lcurve), ch(channel), gpio(pin), fc(fader){
-        pwm = PWMCtl::getInstance();
-        if (!pwm->chStart(ch, gpio))
-            fc->setFader(ch, fade_engine_t::linear_hw);     // attach to fader if channel init had no issues
-    };
-    virtual ~LEDCLight(){};
+    LEDCLight(uint32_t channel, int pin, FadeCtrl *fader = nullptr, luma::curve lcurve = luma::curve::cie1931, float power = 1.0);
+    virtual ~LEDCLight(){};     // TODO: make a proper destructor for fade engine
 
-    PWMCtl *pwmGet(){ return pwm; };
+    PWMCtl *pwmGet(){ return PWMCtl::getInstance(); };
 
     // *** Overrides *** //
     uint32_t getValue()     const override { return PWMCtl::getInstance()->chGetDuty(ch); };
@@ -117,6 +118,7 @@ public:
     virtual uint32_t getValue() const override;
     virtual uint32_t getMaxValue() const override { return 1; };
     virtual float getCurrentPower() const override { return getValue() ? power : 0; }
+    virtual uint32_t getValueScaled(int32_t scale=USE_DEFAULT) const override;
 
     /**
      * @brief Get active logic level

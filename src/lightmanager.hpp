@@ -56,13 +56,24 @@ class Eclo {
 
 //protected:
     /**
+     * @brief static event handler
+     * wraps class members access for event loop
+     * 
+     * @param handler_args 
+     * @param base 
+     * @param id 
+     * @param event_data 
+     */
+    static void event_hndlr(void* handler_args, esp_event_base_t base, int32_t rcpt, void* event_data);
+
+    /**
      * @brief event picker method, processes incoming events from a event_hndlr wrapper
      * 
      * @param base 
      * @param id 
      * @param event_data 
      */
-    void event_picker(esp_event_base_t base, light_event_id_t evid, void* event_data);
+    void event_picker(esp_event_base_t base, int32_t evid, void* event_data);
 
     /**
      * @brief process 'Command base' events
@@ -72,22 +83,15 @@ class Eclo {
      * @param id 
      * @param event_data 
      */
-    void evt_cmd_runner(esp_event_base_t base, light_event_id_t evid, local_cmd_evt const *cmd);
+    void evt_cmd_runner(esp_event_base_t base, int32_t evid, local_cmd_evt const *cmd);
+
+
+    void evt_state_post(light_event_id_t evnt = light_event_id_t::stateUpdate, int32_t groupid = ID_ANONYMOUS, uint16_t dst = ID_ANONYMOUS);
 
 public:
     Eclo(GenericLight *l, uint16_t id, const char *_descr=nullptr);
     ~Eclo();
 
-    /**
-     * @brief static event handler
-     * wraps class members access for event loop
-     * 
-     * @param handler_args 
-     * @param base 
-     * @param id 
-     * @param event_data 
-     */
-    static void event_hndlr(void* handler_args, esp_event_base_t base, int32_t evid, void* event_data);
 
     /**
      * @brief subscribe to events loop with specified base:id event identifiers

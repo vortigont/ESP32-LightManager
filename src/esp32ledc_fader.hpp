@@ -64,8 +64,6 @@ public:
     FadeEngine& operator=(const FadeEngine&) = delete;
 
     virtual bool fade(uint32_t duty, uint32_t duration) = 0;     // pure virtual method, must be redefined in derived classes
-
-    //luma::curve luma_curve = luma::curve::linear;     // luma curve correction for relative methods (like xxPercent)
 };
 
 class FadeEngineHW : public FadeEngine {
@@ -88,40 +86,69 @@ struct ChannelFader {
     fe_callback_t cb = nullptr;
 };
 
-// Fade controller class
+/**
+ * @brief  Fade controller class
+ * manages fade engines for each of esp32 LEDC channels
+ */
 class FadeCtrl {
 
-    // channel faders
+    // channel faders array
     ChannelFader chf[LEDC_SPEED_MODE_MAX*LEDC_CHANNEL_MAX];
 
     PWMCtl *pwm;
     uint32_t events_mask;                        // bit mask for channel event group
-    TaskHandle_t t_fade_evt = nullptr;           // fade events handler
-    EventGroupHandle_t *eg_fade_evt = nullptr;
+    TaskHandle_t t_fade_evt = nullptr;           // fade events ISR task handler
+    EventGroupHandle_t *eg_fade_evt = nullptr;   // Event group for fader engine events
 
-    void fd_events_handler();
+    void fd_events_handler();                    // Task picking events from a group 'eg_fade_evt"
 
-    // static wrapper for event handler Task
+    // static wrapper for event group handler Task
     static void evtTask(void* pvParams){
         ((FadeCtrl*)pvParams)->fd_events_handler();
     }
 
+    /**
+     * @brief a wrapper doing direct duty shift in case of fade engine is not available
+     * 
+     * @param ch 
+     * @param duty 
+     * @return true 
+     * @return false 
+     */
     bool nofade(uint8_t ch, uint32_t duty);
 
-    //bool fadebyTime(uint8_t ch, uint32_t duty, uint32_t duration);
 
 public:
-    FadeCtrl( uint32_t mask = CH_EVENTS_BIT_MASK );
-    ~FadeCtrl();    // todo: destruct faders
+    FadeCtrl( uint32_t mask = CH_EVENTS_BIT_MASK );     // channel mask might be needed in case of several FadeCtrl's instances (hipotheticaly)
+    ~FadeCtrl();    // **** todo ****: destruct faders
 
-
+    /**
+     * @brief Set the Fader engine for the channel
+     * activate fade engine for the specified ledc channel
+     * 
+     * @param ch - channel to activate fade engine on
+     * @param fe - type of fade engine (to be done)
+     * @param f - callback function to call on fader events for this specific channel
+     * @return true 
+     * @return false 
+     */
     bool setFader(uint8_t ch, fade_engine_t fe, fe_callback_t f = nullptr );
+
+    /**
+     * @brief start fade action on channel
+     * runs fade engine on the specified channel
+     * 
+     * @param ch - esp32ledc channel (NOT IDF's one with speed mode)
+     * @param duty - target duty to fade to
+     * @param duration - fade duration
+     * @return true - async fade has started
+     * @return false - failed to start async fade
+     */
     bool fadebyTime(uint8_t ch, uint32_t duty, uint32_t duration);
 
     //void setCurve(uint8_t ch, luma::curve curve){ ch %= LEDC_SPEED_MODE_MAX * LEDC_TIMER_MAX; chf[ch].l_curve = curve; }
 
     //inline virtual uint32_t setFadeDuration(uint32_t duration){ fade_duration = duration; return fade_duration; }
     //inline virtual uint32_t getFadeDuration() const { return fade_duration; }
-
 };
 

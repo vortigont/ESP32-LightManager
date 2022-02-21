@@ -36,6 +36,7 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 
 static const char* TAG = "light_mgr";
 
+using namespace lightmgr;
 
 // Classes implementation
 Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : id(id) {
@@ -48,30 +49,36 @@ Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : id(id) {
 
     light.reset(std::move(l));                              // relocate GenericLight object
 
-    evt_subscribe(LCMD_EVENTS, ESP_EVENT_ANY_ID);           // subscribe to localy originated command events
+    evt_subscribe(LCMD_EVENTS, id);                         // subscribe to localy originated command events destined to MY group id
+    evt_subscribe(LSERVICE_EVENTS, id);                     // subscribe to localy originated serice events destined to MY group id
+    evt_subscribe(LSERVICE_EVENTS, ID_BROADCAST);           // subscribe to localy originated serice events destined to broadcast group id
+    //evt_subscribe(LCMD_EVENTS, ESP_EVENT_ANY_ID);         // subscribe to ALL localy originated command events
     //evt_subscribe(RCMD_EVENTS, mk_uuid(id));              // subscribe to remotely originated events
+
+    light->onChangeAttach([this](){ evt_state_post(); });
 }
 
 Eclo::~Eclo(){
     unsubscribe();
 }
 
-void Eclo::event_hndlr(void* handler_args, esp_event_base_t base, int32_t evid, void* event_data){
-    ESP_LOGI(TAG, "eclo event handling %s:%d", base, evid);
-    reinterpret_cast<Eclo*>(handler_args)->event_picker(base, static_cast<light_event_id_t>(evid), event_data);
+void Eclo::event_hndlr(void* handler_args, esp_event_base_t base, int32_t rcpt, void* event_data){
+    ESP_LOGD(TAG, "eclo event handling %s:%d", base, rcpt);
+    reinterpret_cast<Eclo*>(handler_args)->event_picker(base, rcpt, event_data);
 }
 
 
 bool Eclo::evt_subscribe(esp_event_base_t base, int32_t id){
     esp_event_handler_instance_t evt_instance;
 
-    esp_err_t err = esp_event_handler_instance_register_with(*get_light_evts_loop(), ESP_EVENT_ANY_BASE, ESP_EVENT_ANY_ID, Eclo::event_hndlr, this, &evt_instance);
+    // TODO: добавить проверку что подписка на такое событие уже существует
+    esp_err_t err = esp_event_handler_instance_register_with(*get_light_evts_loop(), base, id, Eclo::event_hndlr, this, &evt_instance);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE){
     	ESP_LOGW(TAG, "event loop subscribe failed for %s", descr.get());
         return false;
     }
 
-  	ESP_LOGI(TAG, "event loop subscribed %s %s:%d", descr.get(), base, id);
+  	ESP_LOGI(TAG, "%s: event loop subscribed to %s:%d", descr.get(), base, id);
     //auto event_instance = std::make_shared<Evt_subscription>();
     Evt_subscription event_instance;
     event_instance.base = base;
@@ -81,14 +88,12 @@ bool Eclo::evt_subscribe(esp_event_base_t base, int32_t id){
     return subscr.add(event_instance);
 }
 
-void Eclo::event_picker(esp_event_base_t base, light_event_id_t evid, void* event_data){
-    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, (int)evid);
+void Eclo::event_picker(esp_event_base_t base, int32_t rcpt, void* event_data){
+    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, rcpt);
 
     if (base == LCMD_EVENTS){
         local_cmd_evt *cmd = reinterpret_cast<local_cmd_evt*>(event_data);
-
-        if(cmd->dst_id == id)       // respond to commands addressed to my id
-            return evt_cmd_runner(base, evid, cmd);
+        return evt_cmd_runner(base, rcpt, cmd);
     }
 
     // TODO: remote/group events logic, etc...
@@ -105,9 +110,9 @@ void Eclo::unsubscribe(){
     }
 }
 
-void Eclo::evt_cmd_runner(esp_event_base_t base, light_event_id_t evid, local_cmd_evt const *cmd){
+void Eclo::evt_cmd_runner(esp_event_base_t base, int32_t rcpt, local_cmd_evt const *cmd){
 
-    switch(evid){
+    switch(cmd->event){
         case light_event_id_t::goValue :
             return light->goValue(cmd->value, cmd->fade_duration);
         case light_event_id_t::goValueScaled :
@@ -136,6 +141,22 @@ void Eclo::evt_cmd_runner(esp_event_base_t base, light_event_id_t evid, local_cm
         //getStatus
         //echoRq
     }
-    //light->goToggle();
 
+}
+
+void Eclo::evt_state_post(light_event_id_t evnt, int32_t groupid, uint16_t dst){
+
+    local_peers_id_t addr;
+    addr.src = id;
+    addr.dst = dst;
+
+    local_state_evt st = {
+        evnt,
+        addr,
+        std::move(light->getState())
+    };
+
+    //light_state_t state = std::move(light->getState());
+
+    ESP_ERROR_CHECK(esp_event_post_to( *get_light_evts_loop(), LSTATE_EVENTS, groupid, &st, sizeof(local_state_evt), 100 / portTICK_PERIOD_MS));
 }

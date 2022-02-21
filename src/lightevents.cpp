@@ -46,17 +46,19 @@ static const char* TAG = "light_evt";
 
 // Event Base definitions
 ESP_EVENT_DEFINE_BASE(LCMD_EVENTS);
-ESP_EVENT_DEFINE_BASE(LSTATUS_EVENTS);
-ESP_EVENT_DEFINE_BASE(LGROUP_EVENTS);
+ESP_EVENT_DEFINE_BASE(LSTATE_EVENTS);
+ESP_EVENT_DEFINE_BASE(LSERVICE_EVENTS);
 ESP_EVENT_DEFINE_BASE(RCMD_EVENTS);
-ESP_EVENT_DEFINE_BASE(RSTATUS_EVENTS);
-ESP_EVENT_DEFINE_BASE(RGROUP_EVENTS);
+ESP_EVENT_DEFINE_BASE(RSTATE_EVENTS);
+ESP_EVENT_DEFINE_BASE(RSERVICE_EVENTS);
 
 // LighEvents loop handler
 static esp_event_loop_handle_t loop_levt_h = nullptr;
 
 
 // Implementations
+namespace lightmgr {
+
 
 esp_event_loop_handle_t* start_levt_loop(){
     if (loop_levt_h)
@@ -94,3 +96,27 @@ uint64_t mk_uuid(uint16_t id){
     uuid <<= 16;
     return uuid |= id;
 };
+
+
+void event_state_printer(esp_event_base_t base, int32_t gid, local_state_evt const *data){
+    if (base != LSTATE_EVENTS){
+        printf("=== not an LSTATE_EVENTS event ===\n");
+        return;
+    }
+
+    printf("=== LSTATE_EVENTS event ===\n");
+
+    printf("MSG Group id:\t%d\n", gid);
+    printf("MSG address src_id: %d,\tdst_id: %d\n", data->id.src, data->id.dst);
+    printf("Light object state:\n");
+    printf("lightsource type: %d\nluma curve: %d\n", (uint8_t)data->state.ltype, (uint8_t)data->state.luma);
+    printf("fade time: %d,\nIncrement step: %d\n", data->state.fadetime, data->state.increment);
+    printf("Active logic level:\t%s\n", data->state.active_ll ? "H" : "L");
+    printf("Brighness value:\t%d/%d\n", data->state.value, data->state.value_max);
+    printf("Brighness scaled:\t%d/%d\n", data->state.value_scaled, data->state.brtscale);
+    printf("Power value: %.2f out of %.2f\n", data->state.power, data->state.power_max);
+
+}
+
+
+}
