@@ -46,16 +46,15 @@ Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : id(id) {
         }  else
             descr.reset(strcpy(new char[strlen(_descr) + 1], _descr));
 
-
     light.reset(std::move(l));                              // relocate GenericLight object
 
     evt_subscribe(LCMD_EVENTS, id);                         // subscribe to localy originated command events destined to MY group id
-    evt_subscribe(LSERVICE_EVENTS, id);                     // subscribe to localy originated serice events destined to MY group id
-    evt_subscribe(LSERVICE_EVENTS, ID_BROADCAST);           // subscribe to localy originated serice events destined to broadcast group id
+    evt_subscribe(LSERVICE_EVENTS, id);                     // subscribe to localy originated service events destined to MY group id
+    evt_subscribe(LSERVICE_EVENTS, ID_BROADCAST);           // subscribe to localy originated service events destined to broadcast group id
     //evt_subscribe(LCMD_EVENTS, ESP_EVENT_ANY_ID);         // subscribe to ALL localy originated command events
     //evt_subscribe(RCMD_EVENTS, mk_uuid(id));              // subscribe to remotely originated events
 
-    light->onChangeAttach([this](){ evt_state_post(); });
+    light->onChangeAttach([this](){ evt_state_post(); });   // send stateUpdate events on light change
 }
 
 Eclo::~Eclo(){
@@ -85,7 +84,7 @@ bool Eclo::evt_subscribe(esp_event_base_t base, int32_t id){
     event_instance.event_id = id;
     event_instance.evt_instance = evt_instance;
 
-    return subscr.add(event_instance);
+    return subscr.add(std::move(event_instance));
 }
 
 void Eclo::event_picker(esp_event_base_t base, int32_t rcpt, void* event_data){
@@ -96,7 +95,26 @@ void Eclo::event_picker(esp_event_base_t base, int32_t rcpt, void* event_data){
         return evt_cmd_runner(base, rcpt, cmd);
     }
 
+    if (base == LSERVICE_EVENTS){
+        local_srvc_evt *e = reinterpret_cast<local_srvc_evt*>(event_data);
+        switch(e->event){
+            case light_event_id_t::echoRq :                                                 // echo reply
+                return evt_pong_post(rcpt, e->id.src);
+            case light_event_id_t::getState :
+                return evt_state_post(light_event_id_t::stateReport, rcpt, e->id.src);      // status report
+            default :
+                break;
+        }
+    }
+
     // TODO: remote/group events logic, etc...
+
+    /**
+     * if we get here, than some unknown event occured,
+     * it can be handled via external callback function set by user
+     */
+    if (unknown_evnt_cb)
+        unknown_evnt_cb(this, base, rcpt, event_data);
 }
 
 void Eclo::unsubscribe(){
@@ -145,6 +163,8 @@ void Eclo::evt_cmd_runner(esp_event_base_t base, int32_t rcpt, local_cmd_evt con
 }
 
 void Eclo::evt_state_post(light_event_id_t evnt, int32_t groupid, uint16_t dst){
+    if (groupid == ID_BROADCAST)    // do not reply to broadcast, reply to dst group
+        groupid = dst;
 
     local_peers_id_t addr;
     addr.src = id;
@@ -157,6 +177,25 @@ void Eclo::evt_state_post(light_event_id_t evnt, int32_t groupid, uint16_t dst){
     };
 
     //light_state_t state = std::move(light->getState());
-
     ESP_ERROR_CHECK(esp_event_post_to( *get_light_evts_loop(), LSTATE_EVENTS, groupid, &st, sizeof(local_state_evt), 100 / portTICK_PERIOD_MS));
+}
+
+void Eclo::evt_pong_post(int32_t groupid, uint16_t dst){
+    if (groupid == ID_BROADCAST)    // do not reply to broadcast, reply to dst group
+        groupid = dst;
+
+    local_srvc_evt msg = {
+        light_event_id_t::echoRpl,  // event type
+        { id, dst },                // msg addtess id
+        0                           // custom value
+    };
+
+    ESP_ERROR_CHECK(esp_event_post_to( *get_light_evts_loop(), LSTATE_EVENTS, groupid, &msg, sizeof(local_srvc_evt), 100 / portTICK_PERIOD_MS));
+}
+
+void Eclo::eventcbAttach(event_loop_cb_t f){
+    if (f)
+        unknown_evnt_cb = std::move(f);
+    else
+        unknown_evnt_cb = nullptr;
 }

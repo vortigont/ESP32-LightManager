@@ -28,14 +28,19 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "light_generics.hpp"
 #include "LList.h"
 
+// fwd declare
+class Eclo;
 
+// event loop message callback type
+typedef std::function<void (Eclo* lo, esp_event_base_t base, int32_t evid, void* data)> event_loop_cb_t;
 
 // Light objects
 
 /**
  * @brief ECLO - Event Controlled Light Object
  * is a light object based on GenericLight or any of it's derivatives attached to
- * control event loop. It is controlled via event messaged
+ * control event loop. It is controlled via event messaged loop only and to the same
+ * loop it pushes it's state updates
  * 
  */
 class Eclo {
@@ -48,11 +53,9 @@ class Eclo {
 
 
     std::shared_ptr<GenericLight> light;
-    uint16_t id;
     std::unique_ptr<char[]> descr;                          // Mnemonic name for the instance
     LList<Evt_subscription> subscr;                         // list of event subscriptions
-
-    void unsubscribe();
+    event_loop_cb_t unknown_evnt_cb = nullptr;              // external callback for unknown events
 
 //protected:
     /**
@@ -85,10 +88,37 @@ class Eclo {
      */
     void evt_cmd_runner(esp_event_base_t base, int32_t evid, local_cmd_evt const *cmd);
 
-
+    /**
+     * @brief post event message with light state
+     * default is post to anonymous group
+     * 
+     * @param evnt - event type, report or on-update
+     * @param groupid - group to post to
+     * @param dst - recipiet's id
+     */
     void evt_state_post(light_event_id_t evnt = light_event_id_t::stateUpdate, int32_t groupid = ID_ANONYMOUS, uint16_t dst = ID_ANONYMOUS);
 
+    /**
+     * @brief post an event message - reply to ping
+     * 
+     * @param evnt 
+     * @param groupid 
+     * @param dst 
+     */
+    void evt_pong_post(int32_t groupid, uint16_t dst);
+
 public:
+
+    uint16_t const id;      // object ID to be used in event control messages
+
+    /**
+     * @brief Construct a new Eclo object
+     * a source GenericLight pointer will be invalidated on creation and can't be used any more
+     * To get the pointer to the object use getLight() method
+     * @param l - GenericLight object (or it's derivatives) to take control
+     * @param id - any random identificator except 0(anonymous) and 65535(broadcast)
+     * @param _descr - mnemonic description
+     */
     Eclo(GenericLight *l, uint16_t id, const char *_descr=nullptr);
     ~Eclo();
 
@@ -103,5 +133,27 @@ public:
      */
     bool evt_subscribe(esp_event_base_t base, int32_t id);
 
+    /**
+     * @brief Get shred pointer to the Light object
+     * 
+     * @return std::shared_ptr<GenericLight> 
+     */
+    std::shared_ptr<GenericLight> getLight(){return light;};
+
+    /**
+     * @brief unsubscribe from event loop all types of events
+     * 
+     */
+    void unsubscribe();
+
+    /**
+     * @brief attach external event loop callback function
+     * all uknown events will be redirected there
+     * to detach callbach - pass a nullptr here
+     * @param f callback function prototype: event_loop_cb_t
+     */
+    void eventcbAttach(event_loop_cb_t f);
 
 };
+
+

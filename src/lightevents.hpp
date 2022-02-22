@@ -88,8 +88,8 @@ struct Lcm {
  * 
  */
 struct local_peers_id_t {
-    uint16_t src = ID_ANONYMOUS;
-    uint16_t dst = ID_ANONYMOUS;
+    uint16_t src;
+    uint16_t dst;
 };
 
 /**
@@ -99,7 +99,7 @@ struct local_peers_id_t {
 struct local_srvc_evt {
     light_event_id_t event;
     local_peers_id_t id;
-    uint32_t value = 0;         // abstract data field
+    uint32_t value;         // abstract data field
 };
 
 
