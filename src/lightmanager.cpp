@@ -39,7 +39,7 @@ static const char* TAG = "light_mgr";
 using namespace lightmgr;
 
 // Classes implementation
-Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : id(id) {
+Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : myid(id) {
         if (!_descr || !*_descr){
             descr.reset(new char[12]);   // i.e. eclo-12345
             sprintf(descr.get(), "eclo-%d", id);
@@ -48,62 +48,94 @@ Eclo::Eclo(GenericLight *l, uint16_t id, const char *_descr) : id(id) {
 
     light.reset(std::move(l));                              // relocate GenericLight object
 
-    evt_subscribe(LCMD_EVENTS, id);                         // subscribe to localy originated command events destined to MY group id
-    evt_subscribe(LSERVICE_EVENTS, id);                     // subscribe to localy originated service events destined to MY group id
-    evt_subscribe(LSERVICE_EVENTS, ID_BROADCAST);           // subscribe to localy originated service events destined to broadcast group id
-    //evt_subscribe(LCMD_EVENTS, ESP_EVENT_ANY_ID);         // subscribe to ALL localy originated command events
-    //evt_subscribe(RCMD_EVENTS, mk_uuid(id));              // subscribe to remotely originated events
+    grp_subscribe(myid, grp_perms_t::rw);                   // subscribe to local private group matching myid (default one)
 
-    light->onChangeAttach([this](){ evt_state_post(); });   // send stateUpdate events on light change
+    /*
+     * Attach to onChange() light object handler
+     * this lamda will post stateUpdate event to the loop on any light change
+     * to all registered groups with WRITE permission
+     */
+    light->onChangeAttach([this](){
+        for (auto i : subscr){
+            if (i.base != LSTATE_EVENTS || !i.grpmode.test(GRP_BIT_W))     // skip non-writable groups
+                continue;
+
+            evt_state_post(light_event_id_t::stateUpdate, i.gid, ID_ANONYMOUS);
+        }
+    });
 }
 
 Eclo::~Eclo(){
     unsubscribe();
 }
 
-void Eclo::event_hndlr(void* handler_args, esp_event_base_t base, int32_t rcpt, void* event_data){
-    ESP_LOGD(TAG, "eclo event handling %s:%d", base, rcpt);
-    reinterpret_cast<Eclo*>(handler_args)->event_picker(base, rcpt, event_data);
+void Eclo::event_hndlr(void* handler_args, esp_event_base_t base, int32_t gid, void* event_data){
+    ESP_LOGD(TAG, "eclo event handling %s:%d", base, gid);
+    reinterpret_cast<Eclo*>(handler_args)->event_picker(base, gid, event_data);
 }
 
+bool Eclo::evt_subscribe(esp_event_base_t base, int32_t gid, grp_perms_t perm){
 
-bool Eclo::evt_subscribe(esp_event_base_t base, int32_t id){
+    // check if such base:gid has been registered already
+    for (auto i : subscr){
+        if (i.base == base && i.gid == gid){
+        	ESP_LOGW(TAG, "%s: already subscribed for %s:%d", descr.get(), base, gid);
+            return false;
+        }
+    }
+
     esp_event_handler_instance_t evt_instance;
 
-    // TODO: добавить проверку что подписка на такое событие уже существует
-    esp_err_t err = esp_event_handler_instance_register_with(*get_light_evts_loop(), base, id, Eclo::event_hndlr, this, &evt_instance);
+    esp_err_t err = esp_event_handler_instance_register_with(*get_light_evts_loop(), base, myid, Eclo::event_hndlr, this, &evt_instance);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE){
-    	ESP_LOGW(TAG, "event loop subscribe failed for %s", descr.get());
+    	ESP_LOGW(TAG, "%s: event loop subscribe failed for %s:%d", descr.get(), base, gid);
         return false;
     }
 
-  	ESP_LOGI(TAG, "%s: event loop subscribed to %s:%d", descr.get(), base, id);
-    //auto event_instance = std::make_shared<Evt_subscription>();
-    Evt_subscription event_instance;
-    event_instance.base = base;
-    event_instance.event_id = id;
-    event_instance.evt_instance = evt_instance;
+    Evt_subscription event_instance = {
+        base,
+        gid,
+        static_cast<uint8_t>(perm),
+        std::move(evt_instance)
+    };
 
+  	ESP_LOGI(TAG, "%s: event loop subscribed to %s:%d", descr.get(), base, gid);
     return subscr.add(std::move(event_instance));
 }
 
-void Eclo::event_picker(esp_event_base_t base, int32_t rcpt, void* event_data){
-    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, rcpt);
+void Eclo::event_picker(esp_event_base_t base, int32_t gid, void* event_data){
+    ESP_LOGI(TAG, "%s event picker %s:%d", descr.get(), base, gid);
 
     if (base == LCMD_EVENTS){
-        local_cmd_evt *cmd = reinterpret_cast<local_cmd_evt*>(event_data);
-        return evt_cmd_runner(base, rcpt, cmd);
+        // check if this group has permission to receive control messages
+        const Evt_subscription *sub = subscr_by_gid(gid);
+        if (!sub){
+            ESP_LOGW(TAG, "%s unregistered event group %s:%d", descr.get(), base, gid);
+            return;
+        }
+
+        if (sub->grpmode.test(GRP_BIT_R)){
+            // todo: check that *data is actually local_cmd_evt
+            local_cmd_evt *cmd = reinterpret_cast<local_cmd_evt*>(event_data);
+            evt_cmd_runner(base, gid, cmd);
+            //return;
+        }
+        return;     // ?? не выходить а сбрасывать обработку на внешний коллбек
     }
 
     if (base == LSERVICE_EVENTS){
         local_srvc_evt *e = reinterpret_cast<local_srvc_evt*>(event_data);
+
+        if (e->id.dst != myid || e->id.dst != ID_ANY)       // ignore messages not to me or not broadcast
+            return;
+
         switch(e->event){
-            case light_event_id_t::echoRq :                                                 // echo reply
-                return evt_pong_post(rcpt, e->id.src);
+            case light_event_id_t::echoRq :                                                // do echo reply
+                return evt_pong_post(gid, e->id.src);
             case light_event_id_t::getState :
-                return evt_state_post(light_event_id_t::stateReport, rcpt, e->id.src);      // status report
+                return evt_state_post(light_event_id_t::stateReport, gid, e->id.src);      // status report
             default :
-                break;
+                return;
         }
     }
 
@@ -114,7 +146,7 @@ void Eclo::event_picker(esp_event_base_t base, int32_t rcpt, void* event_data){
      * it can be handled via external callback function set by user
      */
     if (unknown_evnt_cb)
-        unknown_evnt_cb(this, base, rcpt, event_data);
+        unknown_evnt_cb(this, base, gid, event_data);
 }
 
 void Eclo::unsubscribe(){
@@ -124,7 +156,7 @@ void Eclo::unsubscribe(){
 
     while(subscr.size()){
         auto node = subscr.pop();
-        esp_event_handler_instance_unregister_with(*loop, node.base, node.event_id, node.evt_instance);
+        esp_event_handler_instance_unregister_with(*loop, node.base, node.gid, node.evt_instance);
     }
 }
 
@@ -163,30 +195,19 @@ void Eclo::evt_cmd_runner(esp_event_base_t base, int32_t rcpt, local_cmd_evt con
 }
 
 void Eclo::evt_state_post(light_event_id_t evnt, int32_t groupid, uint16_t dst){
-    if (groupid == ID_BROADCAST)    // do not reply to broadcast, reply to dst group
-        groupid = dst;
-
-    local_peers_id_t addr;
-    addr.src = id;
-    addr.dst = dst;
-
     local_state_evt st = {
         evnt,
-        addr,
-        std::move(light->getState())
+        { myid, dst },    // src, dst id
+        light->getState()
     };
 
-    //light_state_t state = std::move(light->getState());
-    ESP_ERROR_CHECK(esp_event_post_to( *get_light_evts_loop(), LSTATE_EVENTS, groupid, &st, sizeof(local_state_evt), 100 / portTICK_PERIOD_MS));
+    ESP_ERROR_CHECK(esp_event_post_to( *get_light_evts_loop(), LSTATE_EVENTS, groupid ? groupid : myid, &st, sizeof(local_state_evt), 100 / portTICK_PERIOD_MS));
 }
 
 void Eclo::evt_pong_post(int32_t groupid, uint16_t dst){
-    if (groupid == ID_BROADCAST)    // do not reply to broadcast, reply to dst group
-        groupid = dst;
-
     local_srvc_evt msg = {
         light_event_id_t::echoRpl,  // event type
-        { id, dst },                // msg addtess id
+        { myid, dst },                // msg addtess id
         0                           // custom value
     };
 
@@ -198,4 +219,19 @@ void Eclo::eventcbAttach(event_loop_cb_t f){
         unknown_evnt_cb = std::move(f);
     else
         unknown_evnt_cb = nullptr;
+}
+
+Evt_subscription const *Eclo::subscr_by_gid(uint16_t gid) const {
+    for (auto i = subscr.cbegin(); i != subscr.cend(); ++i){
+        if (i->gid == gid)
+            return i.operator->();
+        //    return i
+    }
+    return nullptr;
+}
+
+bool Eclo::grp_subscribe(int32_t gid, grp_perms_t perm){
+    // not nice
+    evt_subscribe(LCMD_EVENTS, gid, perm);                  // subscribe to local gid command events
+    return evt_subscribe(LSERVICE_EVENTS, gid, perm);              // subscribe to local gid service events
 }

@@ -32,6 +32,7 @@ extern "C" {
 }   //extern "C"
 
 #include "light_types.hpp"
+#include <bitset>
 
 // Event Base declarations
 // local events
@@ -44,16 +45,27 @@ ESP_EVENT_DECLARE_BASE(RSTATE_EVENTS);      // declaration of the remote LightSt
 ESP_EVENT_DECLARE_BASE(RSERVICE_EVENTS);    // declaration of the remote Light Service events base
 
 #define ID_ANONYMOUS    0
-#define ID_BROADCAST    0xffff
-
+#define ID_ANY          0xffff
+#define GROUP_SELF      0
+#define GROUP_ANY       ESP_EVENT_ANY_ID    // ESP_EVENT_ANY_ID     -1
 #define NO_OVERRIDE     -1                  // Use light object's own setting
 
-// ESP_EVENT_ANY_ID     -1                  // any event id
 
+// group permissions
+#define GRP_BIT_R     0
+#define GRP_BIT_W     1
+#define GRP_BIT_LEN   2
 
-enum class light_event_id_t:int32_t {
+enum class grp_perms_t:uint8_t {
+    read = 1,
+    write,
+    rw
+};
+
+enum class light_event_id_t:uint8_t {
     noop = 0,           // dummy event
-    // CMD events
+    // Light Command Events
+    lce_start,          // begin marker
     goValue,            // set basic brightness level
     goValueScaled,
     goMax,
@@ -65,23 +77,20 @@ enum class light_event_id_t:int32_t {
     goDecr,
     goStep,
     goStepScaled,
-    // State events
+    lce_end,            // end marker
+    // Light State Events
+    lse_start,
     stateReport,
     stateUpdate,
+    lse_end,
     // Service events
+    se_start,
     echoRq,             // echo request
     echoRpl,            // echo reply
-    getState            // Get generic status info
+    getState,           // Get generic status info
+    se_end
 };
 
-/**
- * @brief Light Control Message structure
- * 
- */
-struct Lcm {
-    uint64_t src_uuid;
-    uint64_t dst_uuid;
-};
 
 /**
  * @brief local event source and destination ids
@@ -124,6 +133,20 @@ struct local_state_evt {
     local_peers_id_t id;
     light_state_t state;
 };
+
+/**
+ * @brief event loop subscription
+ * describe event subscription for an object
+ * and permissions for the group
+ * 
+ */
+struct Evt_subscription {
+    esp_event_base_t base;
+    int32_t gid;
+    std::bitset<GRP_BIT_LEN> grpmode;
+    esp_event_handler_instance_t evt_instance;
+};
+
 
 // Loop management
 

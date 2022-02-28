@@ -45,14 +45,8 @@ typedef std::function<void (Eclo* lo, esp_event_base_t base, int32_t evid, void*
  */
 class Eclo {
 
-    struct Evt_subscription {
-        esp_event_base_t base;
-        int32_t event_id;
-        esp_event_handler_instance_t evt_instance;
-    };
-
-
-    std::shared_ptr<GenericLight> light;
+    uint16_t main_group;                                    // primary event group to listen/publish event to
+    std::shared_ptr<GenericLight> light;                    // Controlled light object
     std::unique_ptr<char[]> descr;                          // Mnemonic name for the instance
     LList<Evt_subscription> subscr;                         // list of event subscriptions
     event_loop_cb_t unknown_evnt_cb = nullptr;              // external callback for unknown events
@@ -67,7 +61,7 @@ class Eclo {
      * @param id 
      * @param event_data 
      */
-    static void event_hndlr(void* handler_args, esp_event_base_t base, int32_t rcpt, void* event_data);
+    static void event_hndlr(void* handler_args, esp_event_base_t base, int32_t gid, void* event_data);
 
     /**
      * @brief event picker method, processes incoming events from a event_hndlr wrapper
@@ -76,7 +70,7 @@ class Eclo {
      * @param id 
      * @param event_data 
      */
-    void event_picker(esp_event_base_t base, int32_t evid, void* event_data);
+    void event_picker(esp_event_base_t base, int32_t gid, void* event_data);
 
     /**
      * @brief process 'Command base' events
@@ -86,7 +80,7 @@ class Eclo {
      * @param id 
      * @param event_data 
      */
-    void evt_cmd_runner(esp_event_base_t base, int32_t evid, local_cmd_evt const *cmd);
+    void evt_cmd_runner(esp_event_base_t base, int32_t gid, local_cmd_evt const *cmd);
 
     /**
      * @brief post event message with light state
@@ -96,7 +90,7 @@ class Eclo {
      * @param groupid - group to post to
      * @param dst - recipiet's id
      */
-    void evt_state_post(light_event_id_t evnt = light_event_id_t::stateUpdate, int32_t groupid = ID_ANONYMOUS, uint16_t dst = ID_ANONYMOUS);
+    void evt_state_post(light_event_id_t evnt = light_event_id_t::stateUpdate, int32_t groupid = GROUP_SELF, uint16_t dst = ID_ANONYMOUS);
 
     /**
      * @brief post an event message - reply to ping
@@ -107,9 +101,12 @@ class Eclo {
      */
     void evt_pong_post(int32_t groupid, uint16_t dst);
 
+    Evt_subscription const *subscr_by_gid(uint16_t gid) const;
+
+
 public:
 
-    uint16_t const id;      // object ID to be used in event control messages
+    uint16_t const myid;      // object ID to be used in event control messages
 
     /**
      * @brief Construct a new Eclo object
@@ -125,13 +122,25 @@ public:
 
     /**
      * @brief subscribe to events loop with specified base:id event identifiers
+     * accepts any type of base:gid, even unsupported ones (for use with external event callback)
+     * for suported events use grp_subscribe() method
      * 
      * @param base ESP event base
      * @param id event id
      * @return true on success
      * @return false on error
      */
-    bool evt_subscribe(esp_event_base_t base, int32_t id);
+    bool evt_subscribe(esp_event_base_t base, int32_t gid, grp_perms_t perm = grp_perms_t::rw);
+
+    /**
+     * @brief subscribe to event group
+     * 
+     * @param gid - group id to subscribe to, might also be GROUP_BROADCAST or GROUP_SELF
+     * @param perm - group permission, (R, W, RW). Controls handling of LCMD_EVENTS, LSTATE_EVENTS. LSERVICE_EVENTS are always processed in both ways
+     * @return true - on success
+     * @return false - on failure
+     */
+    bool grp_subscribe(int32_t gid, grp_perms_t perm = grp_perms_t::rw);
 
     /**
      * @brief Get shred pointer to the Light object

@@ -112,9 +112,9 @@ void event_state_printer(esp_event_base_t base, int32_t gid, local_state_evt con
     printf("lightsource type: %d\nluma curve: %d\n", (uint8_t)data->state.ltype, (uint8_t)data->state.luma);
     printf("fade time: %d,\nIncrement step: %d\n", data->state.fadetime, data->state.increment);
     printf("Active logic level:\t%s\n", data->state.active_ll ? "H" : "L");
-    printf("Brighness value:\t%d/%d\n", data->state.value, data->state.value_max);
-    printf("Brighness scaled:\t%d/%d\n", data->state.value_scaled, data->state.brtscale);
-    printf("Power value: %.2f out of %.2f\n", data->state.power, data->state.power_max);
+    printf("Brightness value:\t%d/%d\n", data->state.value, data->state.value_max);
+    printf("Brightness scaled:\t%d/%d\n", data->state.value_scaled, data->state.brtscale);
+    printf("Power value: %.2f/%.2f\n", data->state.power, data->state.power_max);
 
 }
 
