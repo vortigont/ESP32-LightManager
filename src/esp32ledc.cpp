@@ -88,16 +88,18 @@ esp_err_t PWMCtl::chDutyPhase(uint32_t ch, uint32_t duty, uint32_t phase){
   channels[ch].cfg.duty = duty;
   channels[ch].cfg.hpoint = phase;
 
-  printf("Set Channel:%d, duty:%d, phase:%d\n", ch, duty, phase);
+  ESP_LOGD(TAG, "Set Channel:%d, duty:%d, phase:%d\n", ch, duty, phase);
 
   /* this method does not change hpoint value
     Looks like it's been fixed here - https://github.com/espressif/esp-idf/commit/e175086226405ca5dfd0b0cdde917b0ad8330827
     and merged in https://github.com/espressif/esp-idf/commit/3821a09f8369d510cf9d1669967bfc25f68dd783
     Arduino's 2.0.2 is quite old, so works only for idf build
   */
-  //return ledc_set_duty_and_update(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
+#ifdef LEDC_DUTY_SETNUPDATE
+  return ledc_set_duty_and_update(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
+#endif
 
-// Use this as a compatible workaround for now
+  // Use this as a hackish workaround for older Arduino frameworks
   if (phase)
     ledc_set_duty_with_hpoint(channels[ch].cfg.speed_mode, channels[ch].cfg.channel, duty, phase);
   else

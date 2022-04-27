@@ -269,13 +269,15 @@ void CompositeLight::goValuePhaseShift(uint32_t value, int32_t duration){
     int channel = 0;
     for (auto _i = ls.begin(); _i != ls.end(); ++_i){
         uint32_t duty_shift = value * channel % _i->get()->light->getMaxValue();
-          printf("Phase shifted PWM: ls:%d, duty:%d, phase:%d\n", channel, value, duty_shift);
+        ESP_LOGD(TAG, "Phase-shifted PWM: ls:%d, duty:%d, dty-shift:%d\n", channel, value, duty_shift);
         ++channel;
         DimmableLight *l = static_cast<DimmableLight*>(_i->get()->light.get());
 
-        l->setDutyShift(value, duty_shift);
-        if (duration)
+        if (duration){
+            l->setDutyShift(duty_shift);
             l->fade_to_value(value, duration);
+        } else
+            l->setDutyShift(value, duty_shift);
     }
 }
 

@@ -80,7 +80,15 @@ public:
      * @brief Set the Duty Shift for PWM channel
      * used for Phase-Shifted PWM dimming.
      * Supported range is 0-MAX_DUTY
-     * @param dshift 
+     * @param dshift - Supported range for dshift is (0-MAX_DUTY)
+     */
+    void setDutyShift(uint32_t dshift) override;
+
+    /**
+     * @brief Set Duty and Duty-Shift for PWM channel
+     * used for Phase-Shifted PWM dimming.
+     * @param duty - PWM duty
+     * @param dshift - Supported range for dshift is (0-MAX_DUTY)
      */
     void setDutyShift(uint32_t duty, uint32_t dshift) override;
 

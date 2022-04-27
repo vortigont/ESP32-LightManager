@@ -181,7 +181,15 @@ public:
     /**
      * @brief Set Duty Shift value for the light source if supported by backend driver
      * 
-     * @param dshift duty value 0 - MAX_DUTY_VALUE 
+     * @param dshift duty shift value (0 - MAX_DUTY_VALUE) 
+     */
+    virtual void setDutyShift(uint32_t dshift){};
+
+    /**
+     * @brief Set Duty and Duty Shift value for the light source if supported by backend driver
+     * 
+     * @param duty - PWM duty value
+     * @param dshift duty shift value (0 - MAX_DUTY_VALUE) 
      */
     virtual void setDutyShift(uint32_t duty, uint32_t dshift){};
 

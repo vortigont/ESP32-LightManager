@@ -60,6 +60,13 @@ void LEDCLight::setPWM(uint8_t resolution, uint32_t freq){
     PWM->tmSet(PWM->chGetTimernum(ch), (ledc_timer_bit_t)resolution, freq);
 }
 
+void LEDCLight::setDutyShift(uint32_t dshift){
+    if (dshift > getMaxValue())
+        dshift = getMaxValue();
+
+    PWM->chPhase(ch, dshift);
+}
+
 void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
     if (dshift > getMaxValue())
         dshift = getMaxValue();
