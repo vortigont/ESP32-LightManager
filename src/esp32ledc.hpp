@@ -165,6 +165,14 @@ public:
     esp_err_t chDutyPhase(uint32_t ch, uint32_t duty, uint32_t phase);
 
     uint32_t chGetDuty(uint32_t ch) const;
+
+    /**
+     * @brief get Duty-Offset (phase) for a channel
+     * 
+     * @return uint32_t Duty offset (0 - MAX_DUTY)
+     */
+    uint32_t chGetPhase(uint32_t ch) const;
+
     uint32_t chGetMaxDuty(uint32_t ch) const;   // { CH_SAFE(ch); return wrap_ledc_get_max_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel); };
     ledc::ch const *chGet(uint32_t ch) const { return &channels[ch % (LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX)]; };
 

@@ -85,6 +85,9 @@ void LEDCLight::onFadeEvent(uint32_t fch, fade_event_t e){
         onChange();
 }
 
+uint32_t LEDCLight::getDutyShift() const {
+    return PWM->chGetPhase(ch);
+};
 
 
 /* **** GPIOLight Implementation    **** */

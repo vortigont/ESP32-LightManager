@@ -176,7 +176,7 @@ public:
     // PWM Dimmable light specific methods
     virtual void setPWM(uint8_t resolution, uint32_t freq) = 0;
 
-    virtual void setPhaseShift(int degrees){};
+    // virtual void setPhaseShift(int degrees){};   // no use case
 
     /**
      * @brief Set Duty Shift value for the light source if supported by backend driver
@@ -193,9 +193,9 @@ public:
      */
     virtual void setDutyShift(uint32_t duty, uint32_t dshift){};
 
-    virtual int getPhaseShift(){ return 0; };
+    // virtual int getPhaseShift(){ return 0; };    // no use case
 
-    virtual uint32_t getDutyShift(){ return 0; };
+    virtual uint32_t getDutyShift() const { return 0; };
 };
 
 

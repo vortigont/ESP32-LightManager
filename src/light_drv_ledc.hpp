@@ -92,6 +92,7 @@ public:
      */
     void setDutyShift(uint32_t duty, uint32_t dshift) override;
 
+    uint32_t getDutyShift() const override;
     // Own methods
 
 };

@@ -34,6 +34,11 @@ GitHub: https://github.com/vortigont/ESP32-LightManager
 #include "esp_log.h"
 #endif
 
+// BIT macro's
+#define BIT_SET(var, bit) (var |= 1<<bit)
+#define BIT_CLR(var, bit) (var &= ~(1<<bit))
+#define BIT_READ(var, bit) ((var >> bit) & 1)
+
 static const char* TAG = "light_gnrc";
 
 void GenericLight::goValue(uint32_t value, int32_t duration){
@@ -266,19 +271,48 @@ void CompositeLight::goValuePhaseShift(uint32_t value, int32_t duration){
         return goValueEqual(value, duration);
 
     // calculate per-source duty offset for phase-shifted PWM
-    int channel = 0;
+    uint32_t flags = 0;
+    uint32_t channel = 0;
     for (auto _i = ls.begin(); _i != ls.end(); ++_i){
-        uint32_t duty_shift = value * channel % _i->get()->light->getMaxValue();
-        ESP_LOGD(TAG, "Phase-shifted PWM: ls:%d, duty:%d, dty-shift:%d\n", channel, value, duty_shift);
-        ++channel;
         DimmableLight *l = static_cast<DimmableLight*>(_i->get()->light.get());
+        uint32_t duty_shift = value * channel % l->getMaxValue();
+        ESP_LOGD(TAG, "Phase-shifted PWM: ls:%d, duty:%d, dty-shift:%d\n", channel, value, duty_shift);
 
         if (duration){
-            l->setDutyShift(duty_shift);
-            l->fade_to_value(value, duration);
+
+            if ( l->getDutyShift() + value > l->getMaxValue() ){   // new duty value can't be reached, need phase down-shifting first
+                l->setDutyShift(duty_shift);
+                l->fade_to_value(value, duration);
+            } else {    // if ( l->getValue() + duty_shift > l->getMaxValue() ) // new duty_shift can't be set with current duty
+                l->fade_to_value(value, duration);
+                BIT_SET(flags, channel);
+                // l->setDutyShift(value, duty_shift);              // for LEDC driver chennel is blocked until fade is over
+                                                                    // need to WA this in some ugly manner, so I postpone DutyShift operation
+                                                                    // till ALL the channels equeued fade operation
+                                                                    // otherwise fading would be blocked. Fading for channles will be executed one by one
+                                                                    // this is an ugly hack for now. A better approach would be to use queue mecanism on light driver's level
+            }
         } else
             l->setDutyShift(value, duty_shift);
+
+        ++channel;
     }
+
+    // another iteration to apply new duty_shift value after fade task has been equeued to all channels
+    // TODO: use some queueing at driver's level
+    if (flags){
+        channel = 0;
+        for (auto _i = ls.begin(); _i != ls.end(); ++_i){
+            if (BIT_READ(flags, channel)) {     // shift only affected channels here
+                DimmableLight *l = static_cast<DimmableLight*>(_i->get()->light.get());
+                uint32_t duty_shift = value * channel % l->getMaxValue();
+                l->setDutyShift(value, duty_shift);
+            }
+
+            ++channel;
+        }
+    }
+
 }
 
 

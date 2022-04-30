@@ -112,6 +112,12 @@ uint32_t PWMCtl::chGetDuty(uint32_t ch) const {
   return ledc_get_duty(channels[ch].cfg.speed_mode, channels[ch].cfg.channel);
 }
 
+uint32_t PWMCtl::chGetPhase(uint32_t ch) const {
+  ch %= LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX;
+  return ledc_get_hpoint(channels[ch].cfg.speed_mode, channels[ch].cfg.channel);
+}
+
+
 int PWMCtl::chStart(uint32_t ch, int pin){
   ch %= LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX;
 
