@@ -103,7 +103,7 @@ public:
  * i.e. relays control, state led's etc
  * 
  */
-class GPIOLight : public GenericLight {
+class GPIOLight : public ConstantLight {
 
     gpio_num_t gpio = GPIO_NUM_NC;      // GPIO used as output
     bool all;                           // active logic level

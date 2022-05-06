@@ -160,6 +160,11 @@ public:
 };
 
 
+/**
+ * @brief COnstant light class
+ * any lights that has only two states - on/off
+ * 
+ */
 class ConstantLight : public GenericLight {
 public:
     ConstantLight(float power = 1.0) : GenericLight(lightsource_t::constant, power, luma::curve::binary){};

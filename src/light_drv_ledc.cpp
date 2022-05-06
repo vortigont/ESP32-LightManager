@@ -92,11 +92,11 @@ uint32_t LEDCLight::getDutyShift() const {
 
 /* **** GPIOLight Implementation    **** */
 
-GPIOLight::GPIOLight(gpio_num_t pin, float power, bool lvl) : GenericLight(lightsource_t::constant, power, luma::curve::binary), all(lvl){
+GPIOLight::GPIOLight(gpio_num_t pin, float power, bool lvl) : ConstantLight(power), all(lvl){
     gpio_init(pin, lvl);
 }
 
-GPIOLight::GPIOLight(int pin, float power, bool lvl) : GenericLight(lightsource_t::constant, power, luma::curve::binary), all(lvl){
+GPIOLight::GPIOLight(int pin, float power, bool lvl) : ConstantLight(power), all(lvl){
     gpio_init(static_cast<gpio_num_t>(pin), lvl);
 }
 

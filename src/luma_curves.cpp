@@ -104,10 +104,14 @@ uint32_t curveUnMap(curve c, uint32_t duty, uint32_t max_duty, uint32_t max_luma
 }
 
 uint32_t map_linear(uint32_t l, uint32_t max_duty, uint32_t max_l){
+    if (!l)
+        return 0;
+
     if (l >= max_l)
         return max_duty;
 
-    return round(max_duty * l / max_l);
+    return max_duty * l / max_l + 1;
+    //return round(max_duty * l / max_l);
 }
 
 uint32_t unmap_linear(uint32_t duty, uint32_t max_duty, uint32_t max_l){

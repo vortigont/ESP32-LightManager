@@ -161,8 +161,12 @@ bool CompositeLight::addLight(GenericLight *gl, uint8_t id){
                 combined_value = node->light->getMaxValue();        // MaxValue will be the same for all sources defined by first added node
             break;
         }
-        default : {                                                 // default is sum up max values of all lights
-            combined_value += node->light->getMaxValue();
+        default : {     // power_share_t::incremental
+            combined_value += node->light->getMaxValue();           // default is the sum of max values of all the lights in stack
+
+            if (node->light->getCurve() == luma::curve::binary){    // if constant lights are stacked, than curve mapping mutates to linear
+                luma = luma::curve::linear;
+            }
         }
     }
 
@@ -221,6 +225,10 @@ float CompositeLight::getCurrentPower() const {
 }
 
 luma::curve CompositeLight::setCurve( luma::curve curve){
+    // curve cant't be changed for constant lights
+    if (sub_type == lightsource_t::constant)
+        return luma;
+
     luma = curve;
     for (auto _i = ls.begin(); _i != ls.end(); ++_i){
         _i->get()->light->setCurve(curve);
@@ -235,12 +243,14 @@ void CompositeLight::goValueIncremental(uint32_t value, int32_t duration){
 
         if (value >= m){    // кратное увеличение яркости
             _i->get()->light->fade_to_value(m, duration);
+            ESP_LOGD(TAG, "Composite incremental: set val:%d/%d", m, value);
             value -= m;
             continue;
         }
 
         _i->get()->light->fade_to_value(value, duration);   // выставляем остаток
         value = 0;                                          // остальные источники гасим
+        ESP_LOGD(TAG, "Composite incremental: set val:%d", value);
     }
 }
 
