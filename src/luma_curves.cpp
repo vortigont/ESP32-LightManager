@@ -110,7 +110,7 @@ uint32_t map_linear(uint32_t l, uint32_t max_duty, uint32_t max_l){
     if (l >= max_l)
         return max_duty;
 
-    return max_duty * l / max_l + 1;
+    return max_duty * l / max_l;
     //return round(max_duty * l / max_l);
 }
 
