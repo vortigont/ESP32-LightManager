@@ -74,7 +74,7 @@ public:
      * @return true 
      * @return false 
      */
-    bool setActiveLogicLevel(bool lvl) override;
+    void setActiveLogicLevel(bool lvl) override;
 
     /**
      * @brief Set the Duty Shift for PWM channel
@@ -147,7 +147,7 @@ public:
      * @return true 
      * @return false 
      */
-    virtual bool setActiveLogicLevel(bool lvl) override;
+    virtual void setActiveLogicLevel(bool lvl) override;
 
     luma::curve setCurve( luma::curve curve) override { return luma; };
 };

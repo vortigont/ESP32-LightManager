@@ -74,9 +74,8 @@ void LEDCLight::setDutyShift(uint32_t duty, uint32_t dshift){
     PWM->chDutyPhase(ch, duty, dshift);
 }
 
-bool LEDCLight::setActiveLogicLevel(bool lvl){
+void LEDCLight::setActiveLogicLevel(bool lvl){
     PWM->chSet(ch, gpio, !lvl, !lvl);    // invert LED logic level
-    return lvl;
 }
 
 void LEDCLight::onFadeEvent(uint32_t fch, fade_event_t e){
@@ -125,10 +124,9 @@ void GPIOLight::gpio_init(gpio_num_t pin, bool active_level){
     gpio_set_level(gpio, 0);        // initialize as "disabled" or "off"
 }
 
-bool GPIOLight::setActiveLogicLevel(bool lvl){
+void GPIOLight::setActiveLogicLevel(bool lvl){
     all = lvl;
     GPIO.func_out_sel_cfg[gpio].inv_sel = !all;
-    return all;
 }
 
 void GPIOLight::set_to_value(uint32_t value){

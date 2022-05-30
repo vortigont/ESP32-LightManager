@@ -49,7 +49,7 @@ protected:
     luma::curve luma;
     int32_t fadetime = DEFAULT_FADE_TIME;           // default fade time duration
     int32_t brtscale = DEFAULT_SCALE;               // default scale for brightness
-    int32_t increment = DEFAULT_SCALE / 10;         // default increment step
+    int32_t increment = DEFAULT_SCALE_STEP;         // default increment step
 
     callback_t callback = nullptr;                  // external callback function to call on state change
 
@@ -100,23 +100,48 @@ public:
 
     // set methods
     inline virtual luma::curve setCurve( luma::curve curve) { luma = curve; return luma; };
+
+    /**
+     * @brief Set the Maximum Power for the object
+     * light source power in watts
+     * @param p 
+     * @return float 
+     */
     virtual float setMaxPower(float p);
+
+    /**
+     * @brief Set default Fade Time for the object
+     * 0 - is no fade by default, but can be overriden via method arguments
+     * @param t - fade time in ms
+     */
+    virtual void setFadeTime(int32_t t){ if(t>=0) fadetime = t; };
+
+    /**
+     * @brief Set default Brightness Scale for the object
+     * scale can't be less than '1'
+     * 
+     * @param s - maximum scale value, i.e. 100 - sets scale to 0%-100%
+     */
+    virtual void setScale(int32_t s){ if(s>0) brtscale = s; };
+
+    /**
+     * @brief Set default Scale Step increment/decrement
+     * 
+     * @param step - in range (1 to scale-1)
+     */
+    virtual void setScaleStep(int32_t step){ if(step > 0 && step < brtscale) increment = step; }
 
     /**
      * @brief Set active logic level to HIGH or LOW
      * i.e. could be required to inverse on/off logic or PWM active level
      * default is HIGH
      * 
-     * @param invert 
-     * 
-     * @return true 
-     * @return false 
+     * @param lvl - logic level true/false
      */
-    virtual bool setActiveLogicLevel(bool lvl){ return true; };
+    virtual void setActiveLogicLevel(bool lvl){};
 
 
     // get methods
-
 
     /**
      * @brief Get active logic level to HIGH or LOW
@@ -144,6 +169,11 @@ public:
      */
     virtual light_state_t getState() const;
 
+    virtual int32_t getFadeTime() const { return fadetime; }
+    virtual int32_t getScale() const { return brtscale; }
+    virtual int32_t getScaleStep() const { return increment; }
+
+    // CallBacks
     /**
      * @brief attach external callback function
      * every time objects state changes a callback triggered to notify
