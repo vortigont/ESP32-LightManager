@@ -60,6 +60,15 @@ namespace luma {
 
 enum class curve:uint8_t { binary, linear, cie1931, exponent, sine, square };
 
+/**
+ * @brief map luma value scaled by specified curve
+ * 
+ * @param c - curve to apply to luma scaling
+ * @param luma - unscaled luma value
+ * @param max_duty - dynamic range for the curve, i.e. 256 for 8 bit resolution, etc...
+ * @param max_luma - max luma scale, i.e. 100, means 0-100 scale (same as percents)
+ * @return uint32_t - scaled luma value
+ */
 uint32_t curveMap(curve c, uint32_t luma, uint32_t max_duty, uint32_t max_luma = 100);
 uint32_t curveUnMap(curve c, uint32_t duty, uint32_t max_duty, uint32_t max_luma = 100);
 

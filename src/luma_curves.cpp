@@ -52,17 +52,10 @@ https://www.photonstophotos.net/GeneralTopics/Exposure/Psychometric_Lightness_an
 
 #include "luma_curves.hpp"
 
-#define CIE1931_Y   8.856        // 216/24389
-
-#ifndef PI
-#define PI 3.1415926535897932384626433832795
-#endif
-#ifndef HALF_PI
-#define HALF_PI 1.5707963267948966192313216916398
-#endif
-#ifndef TWO_PI
-#define TWO_PI 6.283185307179586476925286766559
-#endif
+constexpr float CIE1931_Y{8.856};        // 216/24389
+constexpr double PI{3.1415926535897932384626433832795};
+constexpr double HALF_PI{1.5707963267948966192313216916398};
+constexpr double TWO_PI{6.283185307179586476925286766559};
 //#define DEG_TO_RAD 0.017453292519943295769236907684886
 //#define RAD_TO_DEG 57.295779513082320876798154814105
 //#define EULER 2.718281828459045235360287471352
@@ -214,8 +207,7 @@ uint32_t unmap_square(uint32_t duty, uint32_t max_duty, uint32_t max_l){
     if (!duty)
         return 0;
 
-    float uduty = (asinf(float(duty) * 2 / max_duty - 1) + HALF_PI) * max_duty / PI;
-    return round(uduty * max_l / max_duty);
+    return round(sqrt( duty * max_duty ) * max_l / max_duty);
 }
 
 } // namespace luma
